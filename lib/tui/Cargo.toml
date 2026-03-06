@@ -17,13 +17,5 @@ development = ["criterion", "pretty_assertions"]
 [package.metadata.playground]
 features = ["full"]
 
-[profile.release]
-codegen-units = 1
-incremental = false
-
-[profile.bench]
-codegen-units = 1
-incremental = false
-
 [lints.clippy]
 multiple_crate_versions = "allow"
