@@ -2,9 +2,8 @@
 name = "hoy-protocol"
 version = "0.0.0"
 edition = "2024"
-
-[lib]
-name = "hoy_protocol"
+license = "MIT OR Apache-2.0"
+description = "Hoy real-time chat core crate"
 
 [dependencies]
 
