@@ -1,0 +1,11 @@
+# IDEs
+.idea
+.vs
+.vscode
+.nvim
+.cache
+
+# Cargo artefacts
+target
+coverage
+release

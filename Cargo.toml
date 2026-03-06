@@ -1,0 +1,48 @@
+[package]
+name = "hoy"
+version = "0.0.1"
+authors = ["mrbya <v.toth.svk2@gmail.com>"]
+edition = "2024"
+rust-version = "1.85.0"
+description = "Real-time messaging TUI app"
+# documentation = ""
+homepage = ""
+repository = ""
+license = "MIT OR Apache-2.0"
+keywords = []
+categories = []
+
+publish = false
+
+# [[bin]]
+# name = "hoy"
+# path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+
+[dev-dependencies]
+criterion = "0.8"
+pretty_assertions = "1"
+
+[package.metadata.cargo-udeps.ignore]
+development = ["criterion", "pretty_assertions"]
+
+[package.metadata.playground]
+features = ["full"]
+
+[profile.release]
+codegen-units = 1
+incremental = false
+
+[profile.bench]
+codegen-units = 1
+incremental = false
+
+[lints.clippy]
+multiple_crate_versions = "allow"
+
+[[bench]]
+name = "benches"
+harness = false
+required-features = ["full"]
