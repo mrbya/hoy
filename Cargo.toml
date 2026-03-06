@@ -10,7 +10,7 @@ homepage = "https://gitlab.com/byacrates/hoy.git"
 repository = "https://gitlab.com/byacrates/hoy.git"
 license = "MIT OR Apache-2.0"
 keywords = ["hoy", "chat"]
-categories = ["Command line utilities"]
+categories = ["command-line-utilities"]
 
 publish = true
 
