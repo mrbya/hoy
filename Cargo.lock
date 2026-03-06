@@ -290,10 +290,10 @@ version = "0.0.0-r4"
 dependencies = [
  "clap",
  "criterion",
- "hoy-core 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hoy-net 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hoy-protocol 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hoy-tui 0.0.0",
+ "hoy-core",
+ "hoy-net",
+ "hoy-protocol",
+ "hoy-tui",
  "pretty_assertions",
 ]
 
@@ -306,24 +306,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "hoy-core"
-version = "0.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5d9d3bcbb8c01d9448f1915b43d832bb32606f4224c0291f7a27235855fe731"
-
-[[package]]
 name = "hoy-net"
 version = "0.0.0"
 dependencies = [
  "criterion",
  "pretty_assertions",
 ]
-
-[[package]]
-name = "hoy-net"
-version = "0.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c1d6021f95f990354f76a959a4cf4944d95dd085c60d192b8ad02d11ad885b2"
 
 [[package]]
 name = "hoy-protocol"
@@ -334,20 +322,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "hoy-protocol"
-version = "0.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38672ed5a7c200146ad27e4dee542b7f03393ec1b5ef8c24b1b2da20ab0ba827"
-
-[[package]]
 name = "hoy-tui"
 version = "0.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64d7625e54a78fd39f39773445568661262dcd5d6962f6a6289df35068792c64"
-
-[[package]]
-name = "hoy-tui"
-version = "0.0.1"
 dependencies = [
  "criterion",
  "pretty_assertions",

@@ -7,6 +7,12 @@ members = [
     "crates/tui",
 ]
 
+[workspace.dependencies]
+hoy-core = { version = "0.0.0", path = "crates/core" }
+hoy-net = { version = "0.0.0", path = "crates/net"}
+hoy-protocol = { version = "0.0.0", path = "crates/protocol"}
+hoy-tui = { version = "0.0.0", path = "crates/tui" }
+
 [package]
 name = "hoy"
 version = "0.0.0-r4"
@@ -29,10 +35,10 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-hoy-core = { version = "0.0.0" }
-hoy-net = { version = "0.0.0" }
-hoy-protocol = { version = "0.0.0" }
-hoy-tui = { version = "0.0.0" }
+hoy-core.workspace = true
+hoy-net.workspace = true
+hoy-protocol.workspace = true
+hoy-tui.workspace = true
 
 [dev-dependencies]
 criterion = "0.8"
