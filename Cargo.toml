@@ -9,7 +9,7 @@ members = [
 
 [package]
 name = "hoy"
-version = "0.0.0-r2"
+version = "0.0.0-r3"
 authors = ["mrbya <v.toth.svk2@gmail.com>"]
 edition = "2024"
 rust-version = "1.85.0"
@@ -29,10 +29,10 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-hoy-core = { version = "0.0.0", path = "lib/core" }
-hoy-net = { version = "0.0.0", path = "lib/net" }
-hoy-protocol = { version = "0.0.0", path = "lib/protocol" }
-hoy-tui = { version = "0.0.0", path = "lib/tui" }
+hoy-core = { version = "0.0.0" }
+hoy-net = { version = "0.0.0" }
+hoy-protocol = { version = "0.0.0" }
+hoy-tui = { version = "0.0.0" }
 
 [dev-dependencies]
 criterion = "0.8"

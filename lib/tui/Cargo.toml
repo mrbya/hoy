@@ -1,9 +1,9 @@
 [package]
 name = "hoy-tui"
-version = "0.0.0"
+version = "0.0.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-description = "Hoy real-time chat core crate"
+description = "Hoy real-time chat tui crate"
 
 [dependencies]
 
