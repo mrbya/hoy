@@ -1,15 +1,15 @@
 [workspace]
 members = [
     ".",
-    "lib/core",
-    "lib/net",
-    "lib/protocol",
-    "lib/tui",
+    "crates/core",
+    "crates/net",
+    "crates/protocol",
+    "crates/tui",
 ]
 
 [package]
 name = "hoy"
-version = "0.0.0-r3"
+version = "0.0.0-r4"
 authors = ["mrbya <v.toth.svk2@gmail.com>"]
 edition = "2024"
 rust-version = "1.85.0"
