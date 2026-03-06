@@ -6,11 +6,11 @@ edition = "2024"
 rust-version = "1.85.0"
 description = "Real-time messaging TUI app"
 # documentation = ""
-homepage = ""
-repository = ""
+homepage = "https://gitlab.com/byacrates/hoy.git"
+repository = "https://gitlab.com/byacrates/hoy.git"
 license = "MIT OR Apache-2.0"
-keywords = []
-categories = []
+keywords = ["hoy", "chat"]
+categories = ["Command line utilities"]
 
 publish = true
 
