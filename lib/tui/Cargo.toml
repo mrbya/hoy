@@ -1,7 +1,10 @@
 [package]
-name = "hoy-net"
+name = "hoy-tui"
 version = "0.0.0"
 edition = "2024"
+
+[lib]
+name = "hoy_tui"
 
 [dependencies]
 

@@ -1,3 +1,12 @@
+[workspace]
+members = [
+    ".",
+    "lib/core",
+    "lib/net",
+    "lib/protocol",
+    "lib/tui",
+]
+
 [package]
 name = "hoy"
 version = "0.0.0-r2"
@@ -20,10 +29,10 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-hoy-core = { version = "0.0.0", path = "./src/core" }
-hoy-net = { version = "0.0.0", path = "./src/net" }
-hoy-protocol = { version = "0.0.0", path = "./src/protocol" }
-hoy-tui = { version = "0.0.0", path = "./src/tui" }
+hoy-core = { version = "0.0.0", path = "lib/core" }
+hoy-net = { version = "0.0.0", path = "lib/net" }
+hoy-protocol = { version = "0.0.0", path = "lib/protocol" }
+hoy-tui = { version = "0.0.0", path = "lib/tui" }
 
 [dev-dependencies]
 criterion = "0.8"

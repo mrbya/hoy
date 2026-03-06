@@ -300,18 +300,34 @@ dependencies = [
 [[package]]
 name = "hoy-core"
 version = "0.0.0"
+dependencies = [
+ "criterion",
+ "pretty_assertions",
+]
 
 [[package]]
 name = "hoy-net"
 version = "0.0.0"
+dependencies = [
+ "criterion",
+ "pretty_assertions",
+]
 
 [[package]]
 name = "hoy-protocol"
 version = "0.0.0"
+dependencies = [
+ "criterion",
+ "pretty_assertions",
+]
 
 [[package]]
 name = "hoy-tui"
 version = "0.0.0"
+dependencies = [
+ "criterion",
+ "pretty_assertions",
+]
 
 [[package]]
 name = "is_terminal_polyfill"
