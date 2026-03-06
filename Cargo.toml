@@ -8,14 +8,12 @@ members = [
 ]
 
 [workspace.dependencies]
-hoy-core = { version = "0.0.0", path = "crates/core" }
-hoy-net = { version = "0.0.0", path = "crates/net"}
-hoy-protocol = { version = "0.0.0", path = "crates/protocol"}
-hoy-tui = { version = "0.0.0", path = "crates/tui" }
+hoy-core = { version = "0.0.1-pre1", path = "crates/core" }
+hoy-net = { version = "0.0.1-pre1", path = "crates/net"}
+hoy-protocol = { version = "0.0.1-pre1", path = "crates/protocol"}
+hoy-tui = { version = "0.0.1-pre1", path = "crates/tui" }
 
-[package]
-name = "hoy"
-version = "0.0.0-r4"
+[workspace.package]
 authors = ["mrbya <v.toth.svk2@gmail.com>"]
 edition = "2024"
 rust-version = "1.85.0"
@@ -26,6 +24,20 @@ repository = "https://gitlab.com/byacrates/hoy.git"
 license = "MIT OR Apache-2.0"
 keywords = ["hoy", "chat"]
 categories = ["command-line-utilities"]
+
+[package]
+name = "hoy"
+version = "0.0.1-pre1"
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+# documentation.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Real-time messaging TUI app"
 
 publish = true
 
