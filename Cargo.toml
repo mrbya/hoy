@@ -45,6 +45,9 @@ publish = true
 name = "hoy"
 path = "src/main.rs"
 
+[features]
+full = []
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 hoy-core.workspace = true
