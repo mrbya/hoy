@@ -1,0 +1,27 @@
+[package]
+name = "hoy-tui"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+
+[dev-dependencies]
+criterion = "0.8"
+pretty_assertions = "1"
+
+[package.metadata.cargo-udeps.ignore]
+development = ["criterion", "pretty_assertions"]
+
+[package.metadata.playground]
+features = ["full"]
+
+[profile.release]
+codegen-units = 1
+incremental = false
+
+[profile.bench]
+codegen-units = 1
+incremental = false
+
+[lints.clippy]
+multiple_crate_versions = "allow"

@@ -1,6 +1,6 @@
 [package]
 name = "hoy"
-version = "0.0.0"
+version = "0.0.0-r2"
 authors = ["mrbya <v.toth.svk2@gmail.com>"]
 edition = "2024"
 rust-version = "1.85.0"
@@ -20,6 +20,10 @@ publish = true
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
+hoy-core = { version = "0.0.0", path = "./src/core" }
+hoy-net = { version = "0.0.0", path = "./src/net" }
+hoy-protocol = { version = "0.0.0", path = "./src/protocol" }
+hoy-tui = { version = "0.0.0", path = "./src/tui" }
 
 [dev-dependencies]
 criterion = "0.8"

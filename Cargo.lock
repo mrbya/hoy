@@ -290,8 +290,28 @@ version = "0.0.0"
 dependencies = [
  "clap",
  "criterion",
+ "hoy-core",
+ "hoy-net",
+ "hoy-protocol",
+ "hoy-tui",
  "pretty_assertions",
 ]
+
+[[package]]
+name = "hoy-core"
+version = "0.0.0"
+
+[[package]]
+name = "hoy-net"
+version = "0.0.0"
+
+[[package]]
+name = "hoy-protocol"
+version = "0.0.0"
+
+[[package]]
+name = "hoy-tui"
+version = "0.0.0"
 
 [[package]]
 name = "is_terminal_polyfill"
