@@ -20,10 +20,10 @@ publish = true
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-hoy-core = { version = "0.0.0", path = "./src/core" }
-hoy-net = { version = "0.0.0", path = "./src/net" }
-hoy-protocol = { version = "0.0.0", path = "./src/protocol" }
-hoy-tui = { version = "0.0.0", path = "./src/tui" }
+hoy-core = { version = "0.0.0", path = "./src/hoy-core" }
+hoy-net = { version = "0.0.0", path = "./src/hoy-net" }
+hoy-protocol = { version = "0.0.0", path = "./src/hoy-protocol" }
+hoy-tui = { version = "0.0.0", path = "./src/hoy-tui" }
 
 [dev-dependencies]
 criterion = "0.8"
