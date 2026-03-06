@@ -1,6 +1,6 @@
 [package]
 name = "hoy"
-version = "0.0.1"
+version = "0.0.0"
 authors = ["mrbya <v.toth.svk2@gmail.com>"]
 edition = "2024"
 rust-version = "1.85.0"
@@ -12,7 +12,7 @@ license = "MIT OR Apache-2.0"
 keywords = []
 categories = []
 
-publish = false
+publish = true
 
 # [[bin]]
 # name = "hoy"
