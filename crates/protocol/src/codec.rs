@@ -89,3 +89,149 @@ where
     let value = serde_json::from_slice(payload)?;
     Ok(value)
 }
+
+#[cfg(test)]
+#[allow(dead_code)]
+mod tests {
+    use serde::{de::DeserializeOwned, Serialize};
+
+    use crate::{
+        codec::{decode_frame, encode_frame},
+        error::ProtocolError,
+        packet::{ClientPacket, ServerPacket},
+    };
+
+    macro_rules! assert_err {
+        ($value:expr, $error:pat) => {
+            assert!(matches!($value, $error));
+        };
+    }
+
+    fn build_frame(payload: &[u8]) -> Vec<u8> {
+        let payload_len_u32 =
+            u32::try_from(payload.len()).expect("test payload length capacity overflow");
+
+        let frame_capacity: usize = 4_usize
+            .checked_add(payload.len())
+            .expect("test frame capacity overflow");
+
+        let mut frame: Vec<u8> = Vec::with_capacity(frame_capacity);
+        frame.extend_from_slice(&payload_len_u32.to_be_bytes());
+        frame.extend_from_slice(payload);
+        frame
+    }
+
+    fn encode_frame_ok(value: &impl Serialize) -> Vec<u8> {
+        encode_frame(&value).expect("Frame encoding failed unexpectedly.")
+    }
+
+    fn encode_frame_err(value: &impl Serialize, error: &str) -> ProtocolError {
+        encode_frame(&value).expect_err(&format!("Expected error: ${error}."))
+    }
+
+    fn decode_frame_ok<T>(frame: &[u8]) -> T
+    where
+        T: DeserializeOwned,
+    {
+        decode_frame(frame).expect("Frame deserialization failed unexpectedly.")
+    }
+
+    fn decode_frame_err<T>(frame: &[u8], error: &str) -> ProtocolError
+    where
+        T: DeserializeOwned + std::fmt::Debug,
+    {
+        decode_frame::<T>(frame).expect_err(&format!("Expected error: {error}."))
+    }
+
+    #[test]
+    fn encode_and_decode_client_packet_roundtrip() {
+        let packet = ClientPacket::Hello {
+            username: String::from("bruce_lee"),
+        };
+        let frame = encode_frame_ok(&packet);
+        let decoded: ClientPacket = decode_frame_ok(&frame);
+
+        assert_eq!(decoded, packet);
+    }
+
+    #[test]
+    fn encode_and_decode_server_packet_roundtrip() {
+        let packet: ServerPacket = ServerPacket::ChatMesage {
+            from: String::from("bruce_lee"),
+            room: String::from("#general"),
+            text: String::from("Kung foo..."),
+        };
+        let frame = encode_frame_ok(&packet);
+        let decoded: ServerPacket = decode_frame_ok(&frame);
+
+        assert_eq!(decoded, packet);
+    }
+
+    #[test]
+    fn decode_frame_rejects_truncated_header() {
+        let frame: Vec<u8> = vec![0, 0, 0];
+        let error = decode_frame_err::<ClientPacket>(&frame, "Truncated header");
+
+        assert_err!(error, ProtocolError::TruncatedFrame);
+    }
+
+    #[test]
+    fn decode_frame_rejects_truncated_payload() {
+        let declared_payload_len: u32 = 10;
+        let mut frame: Vec<u8> = Vec::new();
+        frame.extend_from_slice(&declared_payload_len.to_be_bytes());
+        frame.extend_from_slice(b"abc");
+        let error = decode_frame_err::<ClientPacket>(&frame, "Truncated payload");
+
+        assert_err!(error, ProtocolError::TruncatedFrame);
+    }
+
+    #[test]
+    fn decode_frame_rejects_invalid_json_payload() {
+        let frame: Vec<u8> = build_frame(b"this is not valid json");
+        let error = decode_frame_err::<ClientPacket>(&frame, "Serde error");
+
+        assert_err!(error, ProtocolError::Serde(_));
+    }
+
+    #[test]
+    fn decode_frame_rejects_json_of_wrong_packet_shape() {
+        let payload: &[u8] = br#"{"NotARealPacket":{"foo":"bar"}}"#;
+        let frame: Vec<u8> = build_frame(payload);
+        let error = decode_frame_err::<ClientPacket>(&frame, "Serde error");
+
+        assert_err!(error, ProtocolError::Serde(_));
+    }
+
+    #[test]
+    fn decode_frame_ignores_trailing_bytes_after_payload() {
+        let packet: ClientPacket = ClientPacket::Ping;
+        let mut frame = encode_frame_ok(&packet);
+        frame.extend_from_slice(b"trailing bytes that belong to a future frame");
+        let decoded: ClientPacket = decode_frame_ok(&frame);
+
+        assert_eq!(decoded, packet);
+    }
+
+    #[test]
+    fn decode_frame_accepts_empty_string_fields() {
+        let packet: ClientPacket = ClientPacket::Hello {
+            username: String::new(),
+        };
+        let frame = encode_frame_ok(&packet);
+        let decoded: ClientPacket = decode_frame_ok(&frame);
+
+        assert_eq!(decoded, packet);
+    }
+
+    #[test]
+    fn decode_frame_handles_utf8_content() {
+        let packet: ServerPacket = ServerPacket::SystemMessage {
+            text: String::from("Ahoj ^^ Привет こんにちは"),
+        };
+        let frame = encode_frame_ok(&packet);
+        let decoded: ServerPacket = decode_frame_ok(&frame);
+
+        assert_eq!(decoded, packet);
+    }
+}
