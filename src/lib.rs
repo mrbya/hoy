@@ -4,7 +4,7 @@
 // clippy WARN level lints
 #![warn(
     missing_docs,
-    clippy::cargo,
+    //clippy::cargo,
     clippy::pedantic,
     clippy::nursery,
     clippy::dbg_macro,

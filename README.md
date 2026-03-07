@@ -18,6 +18,13 @@ A TUI real time messaging app inspired by accord.
 
 <!-- tocstop -->
 
+## Crates
+
+1. `hoy-core` - Shared domain logic
+2. `hoy-net` - Networkig logic
+3. `hoy-protocol` - Wire level protocol defining packets and codec
+4. `hoy-tui` - App TUI
+
 ## Similar projects
 - [accord](https://github.com/LoipesMas/accord)
 

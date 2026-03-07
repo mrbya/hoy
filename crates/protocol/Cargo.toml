@@ -13,6 +13,9 @@ categories.workspace = true
 description = "Hoy real-time chat protocol crate"
 
 [dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 criterion = "0.8"

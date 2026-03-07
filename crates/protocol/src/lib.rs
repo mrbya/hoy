@@ -4,7 +4,7 @@
 #![allow(clippy::multiple_crate_versions)]
 // clippy WARN level lints
 #![warn(
-    missing_docs,
+    //missing_docs,
     //clippy::cargo,
     clippy::pedantic,
     clippy::nursery,

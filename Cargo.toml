@@ -12,6 +12,12 @@ hoy-core = { version = "0.0.1-pre1", path = "crates/core" }
 hoy-net = { version = "0.0.1-pre1", path = "crates/net"}
 hoy-protocol = { version = "0.0.1-pre1", path = "crates/protocol"}
 hoy-tui = { version = "0.0.1-pre1", path = "crates/tui" }
+thiserror = "2.0.18"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 
 [workspace.package]
 authors = ["mrbya <v.toth.svk2@gmail.com>"]
@@ -54,6 +60,8 @@ hoy-core.workspace = true
 hoy-net.workspace = true
 hoy-protocol.workspace = true
 hoy-tui.workspace = true
+serde_json = "1.0.149"
+thiserror.workspace = true
 
 [dev-dependencies]
 criterion = "0.8"
