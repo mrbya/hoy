@@ -1,4 +1,5 @@
-use serde::{de::DeserializeOwned, Serialize};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 
 use crate::error::ProtocolError;
 
@@ -93,13 +94,12 @@ where
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
-    use serde::{de::DeserializeOwned, Serialize};
+    use serde::Serialize;
+    use serde::de::DeserializeOwned;
 
-    use crate::{
-        codec::{decode_frame, encode_frame},
-        error::ProtocolError,
-        packet::{ClientPacket, ServerPacket},
-    };
+    use crate::codec::{decode_frame, encode_frame};
+    use crate::error::ProtocolError;
+    use crate::packet::{ClientPacket, ServerPacket};
 
     macro_rules! assert_err {
         ($value:expr, $error:pat) => {
