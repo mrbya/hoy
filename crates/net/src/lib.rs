@@ -65,6 +65,12 @@
 
 /// Hoy client module.
 pub mod client;
+/// Id
+pub mod client_id;
+/// Command
+pub mod command;
+/// Connection
+pub mod connection;
 /// Hoy-net error definitions.
 pub mod error;
 /// Hoy server module.

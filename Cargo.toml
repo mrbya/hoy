@@ -12,6 +12,7 @@ hoy-core = { version = "0.0.1-pre1", path = "crates/core" }
 hoy-net = { version = "0.0.1-pre1", path = "crates/net"}
 hoy-protocol = { version = "0.0.1-pre1", path = "crates/protocol"}
 hoy-tui = { version = "0.0.1-pre1", path = "crates/tui" }
+hoy-test = { version = "0.0.0", path = "crates/test" }
 thiserror = "2.0.18"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -56,6 +57,7 @@ full = []
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
+tokio.workspace = true
 hoy-core.workspace = true
 hoy-net.workspace = true
 hoy-protocol.workspace = true
@@ -66,7 +68,6 @@ thiserror.workspace = true
 [dev-dependencies]
 criterion = "0.8"
 pretty_assertions = "1"
-hoy-test = { version = "0.0.0", path = "crates/test" }
 
 [package.metadata.cargo-udeps.ignore]
 development = ["criterion", "pretty_assertions"]

@@ -13,6 +13,9 @@ categories.workspace = true
 description = "Hoy real-time chat netGcrate"
 
 [dependencies]
+hoy-protocol.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 criterion = "0.8"
