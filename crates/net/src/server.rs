@@ -246,6 +246,7 @@ async fn handle_server_command(state: &mut ServerState, command: ServerCommand) 
                 .clients
                 .insert(client_id, ClientHandle { username: None, tx });
         }
+
         ServerCommand::Disconnected { client_id } => {
             let removed = state.clients.remove(&client_id);
 
@@ -259,6 +260,7 @@ async fn handle_server_command(state: &mut ServerState, command: ServerCommand) 
                 }
             }
         }
+
         ServerCommand::Packet { client_id, packet } => match packet {
             ClientPacket::Hello { username } => {
                 handle_hello(state, client_id, username).await;
@@ -294,4 +296,131 @@ pub async fn run_server(bind_addr: SocketAddr) -> Result<(), NetError> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+#[allow(dead_code, unused)]
+mod tests {
+    use std::{error::Error, time::Duration};
+
+    use hoy_protocol::packet::ServerPacket;
+
+    use hoy_test::async_ok;
+    use tokio::time::timeout;
+
+    use crate::{
+        client_id::ClientId,
+        command::ServerCommand,
+        server::{
+            ClientHandle, ServerState, handle_hello, handle_send_message, handle_server_command,
+        },
+    };
+
+    fn init_state(
+        username: Option<String>,
+    ) -> (
+        ServerState,
+        ClientId,
+        tokio::sync::mpsc::Sender<ServerPacket>,
+        tokio::sync::mpsc::Receiver<ServerPacket>,
+    ) {
+        let (tx, rx) = tokio::sync::mpsc::channel(8);
+
+        let client_id = ClientId::new(1);
+        let mut state = ServerState::default();
+        let _previous = state.clients.insert(
+            client_id.clone(),
+            ClientHandle {
+                username,
+                tx: tx.clone(),
+            },
+        );
+
+        (state, client_id, tx, rx)
+    }
+
+    #[tokio::test]
+    async fn handle_hello_registers_client_and_sends_welcome() -> Result<(), ()> {
+        let (mut state, client_id, tx, mut rx) = init_state(None);
+
+        async_ok!(
+            200,
+            handle_hello(&mut state, client_id.clone(), String::from("bruce_lee"))
+        );
+
+        let username = state.username_of(&client_id);
+        assert_eq!(username, Some("bruce_lee"));
+
+        let packet = async_ok!(200, rx.recv()).expect("Packet reception failed unexpectedly");
+
+        match packet {
+            ServerPacket::Welcome {
+                username: name,
+                room,
+            } => {
+                assert_eq!(name, "bruce_lee");
+                assert_eq!(room, "#general");
+            }
+
+            other => return Err(()),
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn handle_send_message_broadcasts_message() -> Result<(), ()> {
+        let (mut state, client_id, tx, mut rx) = init_state(Some("bruce_lee".to_owned()));
+
+        async_ok!(
+            200,
+            handle_send_message(&state, client_id, String::from("abcd"))
+        );
+
+        let packet = async_ok!(200, rx.recv()).expect("Packet reception failed unexpectedly.");
+
+        match packet {
+            ServerPacket::ChatMessage { from, room, text } => {
+                assert_eq!(from, "bruce_lee");
+                assert_eq!(room, "#general");
+                assert_eq!(text, "abcd");
+            }
+
+            other => return Err(()),
+        }
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn handle_server_command_handles_connected_and_disconnect() -> Result<(), ()> {
+        let (mut state, _, tx, mut rx) = init_state(None);
+        let client_id = ClientId::new(2);
+        let command_connect = ServerCommand::Connected {
+            client_id: client_id.clone(),
+            tx,
+        };
+
+        async_ok!(200, handle_server_command(&mut state, command_connect));
+
+        let handle = state
+            .clients
+            .get(&client_id.clone())
+            .expect("Handle retrieval failed unexpectedly.");
+        assert_eq!(handle.username, None);
+
+        let command_disconnect = ServerCommand::Disconnected {
+            client_id: client_id.clone(),
+        };
+
+        async_ok!(200, handle_server_command(&mut state, command_disconnect));
+
+        let handle_none = state.clients.get(&client_id.clone());
+        match handle_none {
+            None => return Ok(()),
+            other => return Err(()),
+        }
+
+        Ok(())
+    }
 }

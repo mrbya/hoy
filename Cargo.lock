@@ -320,6 +320,7 @@ version = "0.0.1-pre1"
 dependencies = [
  "criterion",
  "hoy-protocol",
+ "hoy-test",
  "pretty_assertions",
  "thiserror",
  "tokio",
