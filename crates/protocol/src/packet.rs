@@ -33,7 +33,7 @@ pub enum ServerPacket {
     },
 
     /// Chat message broadcast by the server.
-    ChatMesage {
+    ChatMessage {
         /// Message sender username.
         from: String,
 

@@ -21,7 +21,7 @@ A TUI real time messaging app inspired by accord.
 ## Crates
 
 1. `hoy-core` - Shared domain logic
-2. `hoy-net` - Networkig logic
+2. `hoy-net` - Networkig layer
 3. `hoy-protocol` - Wire level protocol defining packets and codec
 4. `hoy-tui` - App TUI
 

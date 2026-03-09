@@ -226,7 +226,7 @@ mod tests {
 
     #[test]
     fn encode_and_decode_server_packet_roundtrip() {
-        let packet: ServerPacket = ServerPacket::ChatMesage {
+        let packet: ServerPacket = ServerPacket::ChatMessage {
             from: String::from("bruce_lee"),
             room: String::from("#general"),
             text: String::from("Kung foo..."),

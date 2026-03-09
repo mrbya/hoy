@@ -40,7 +40,7 @@ const FRAME_BUFFER_SIZE: usize = 4096;
  */
 pub async fn handle_connection(
     stream: TcpStream,
-    client_id: &ClientId,
+    client_id: ClientId,
     server_tx: mpsc::Sender<ServerCommand>,
 ) -> Result<(), NetError> {
     let (mut reader, mut writer) = stream.into_split();

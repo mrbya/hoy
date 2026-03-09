@@ -43,7 +43,7 @@ impl ServerState {
         for client in self.clients.values() {
             let send_result = client.tx.send(packet.clone()).await;
             if let Err(e) = send_result {
-                let _ = e;
+                eprintln!("Client channel send failed: {e}");
             }
         }
     }
@@ -72,6 +72,7 @@ impl ServerState {
 
         client.tx.send(packet).await.map_err(|e| {
             let _ = e;
+            eprint!("Client channel send failed: {e}");
             NetError::ClientChannelClosed
         })
     }
@@ -123,6 +124,7 @@ fn spawn_accept_loop(listener: TcpListener, server_tx: mpsc::Sender<ServerComman
             let accepted = listener.accept().await;
 
             let Ok((stream, _peer_addr)) = accepted else {
+                eprintln!("Accept error.");
                 break;
             };
 
@@ -136,7 +138,7 @@ fn spawn_accept_loop(listener: TcpListener, server_tx: mpsc::Sender<ServerComman
 
             tokio::spawn(async move {
                 let connection_result =
-                    handle_connection(stream, &client_id, connection_server_tx).await;
+                    handle_connection(stream, client_id, connection_server_tx).await;
 
                 if let Err(e) = connection_result {
                     eprintln!("Connection error: {e:?}");
@@ -154,8 +156,7 @@ fn spawn_accept_loop(listener: TcpListener, server_tx: mpsc::Sender<ServerComman
  * - `client_id`: Client that sent the hello.
  * - `client_name`: Requested username.
  */
-async fn handle_hello(state: &mut ServerState, client_id: ClientId, client_name: String) {
-    let username = client_name;
+async fn handle_hello(state: &mut ServerState, client_id: ClientId, username: String) {
     if state.username_of(&client_id).is_some() {
         let _send_result = state
             .send_to_client(
@@ -210,7 +211,7 @@ async fn handle_hello(state: &mut ServerState, client_id: ClientId, client_name:
  * - `text`: Message body.
  */
 async fn handle_send_message(state: &ServerState, client_id: ClientId, text: String) {
-    let Some(username) = state.username_of(&client_id) else {
+    let Some(username) = state.username_of(&client_id).map(String::from) else {
         let _send_result = state
             .send_to_client(
                 client_id,
@@ -223,8 +224,8 @@ async fn handle_send_message(state: &ServerState, client_id: ClientId, text: Str
     };
 
     state
-        .broadcast(&ServerPacket::ChatMesage {
-            from: String::from(username),
+        .broadcast(&ServerPacket::ChatMessage {
+            from: username,
             room: String::from(DEFAULT_ROOM),
             text,
         })
