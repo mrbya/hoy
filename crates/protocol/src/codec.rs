@@ -190,6 +190,32 @@ mod tests {
         decode_frame::<T>(frame).expect_err(&format!("Expected error: {error}."))
     }
 
+    fn try_decode_frame_ok<T>(buffer: &[u8]) -> (T, usize)
+    where
+        T: DeserializeOwned,
+    {
+        try_decode_frame::<T>(buffer)
+            .expect("Unexpected failure while trying to deserialize frame from buffer.")
+            .expect("Frame deserialization should not return None.")
+    }
+
+    fn try_decode_frame_none<T>(buffer: &[u8]) -> Option<(T, usize)>
+    where
+        T: DeserializeOwned + std::fmt::Debug + PartialEq,
+    {
+        let result = try_decode_frame::<T>(buffer)
+            .expect("Unexpected failure while trying to deserialize frame from buffer.");
+        assert_eq!(result, None);
+        result
+    }
+
+    fn try_decode_frame_err<T>(buffer: &[u8], error: &str) -> ProtocolError
+    where
+        T: DeserializeOwned + std::fmt::Debug,
+    {
+        try_decode_frame::<T>(buffer).expect_err(&format!("Expected error: {error}."))
+    }
+
     #[test]
     fn encode_and_decode_client_packet_roundtrip() {
         let packet = ClientPacket::Hello {
@@ -286,7 +312,7 @@ mod tests {
     fn try_decode_frame_returns_none_for_incomplete_header() {
         let buffer: Vec<u8> = vec![0, 0, 0];
 
-        let result = try_decode_frame::<ClientPacket>(&buffer).expect("Should not err");
+        let result = try_decode_frame_none::<ClientPacket>(&buffer);
 
         assert_eq!(result, None);
     }
@@ -298,7 +324,7 @@ mod tests {
         buffer.extend_from_slice(&declared_payload_len.to_be_bytes());
         buffer.extend_from_slice(b"abc");
 
-        let result = try_decode_frame::<ClientPacket>(&buffer).expect("Should not err");
+        let result = try_decode_frame_none::<ClientPacket>(&buffer);
 
         assert_eq!(result, None);
     }
@@ -308,12 +334,7 @@ mod tests {
         let packet = ClientPacket::Ping;
         let frame: Vec<u8> = encode_frame_ok(&packet);
 
-        let Some((decoded, consumed)) =
-            try_decode_frame::<ClientPacket>(&frame).expect("Should not err")
-        else {
-            unreachable!("Should not return None");
-            return;
-        };
+        let (decoded, consumed) = try_decode_frame_ok::<ClientPacket>(&frame);
         assert_eq!(decoded, packet);
         assert_eq!(consumed, frame.len());
     }
@@ -325,12 +346,7 @@ mod tests {
         let frame_len: usize = buffer.len();
         buffer.extend_from_slice(b"trailing bytes");
 
-        let Some((decoded, consumed)) =
-            try_decode_frame::<ClientPacket>(&buffer).expect("Should not err")
-        else {
-            unreachable!("Should not return None");
-            return;
-        };
+        let (decoded, consumed) = try_decode_frame_ok::<ClientPacket>(&buffer);
         assert_eq!(decoded, packet);
         assert_eq!(consumed, frame_len);
     }
@@ -339,7 +355,7 @@ mod tests {
     fn try_decode_frame_rejects_invalid_complete_payload() {
         let buffer: Vec<u8> = build_frame(b"this is not a valid json");
 
-        let err = try_decode_frame::<ClientPacket>(&buffer).expect_err("Serde error expected.");
+        let err = try_decode_frame_err::<ClientPacket>(&buffer, "Serde error");
 
         assert_err!(err, ProtocolError::Serde(_));
     }
@@ -360,12 +376,7 @@ mod tests {
         buffer.extend_from_slice(&frame1);
         buffer.extend_from_slice(&frame2);
 
-        let Some((decoded, consumed)) =
-            try_decode_frame::<ClientPacket>(&buffer).expect("Should not err.")
-        else {
-            unreachable!("Should not return None");
-            return;
-        };
+        let (decoded, consumed) = try_decode_frame_ok::<ClientPacket>(&buffer);
 
         assert_eq!(decoded, packet1);
         assert_eq!(consumed, len1);
