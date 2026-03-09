@@ -67,3 +67,14 @@
 pub fn hoy() {
     println!("Hoy!");
 }
+
+#[cfg(test)]
+#[allow(dead_code, unused)]
+mod tests {
+    use crate::hoy;
+
+    #[test]
+    fn test_hoy() {
+        hoy();
+    }
+}
