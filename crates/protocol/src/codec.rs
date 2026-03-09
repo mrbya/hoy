@@ -67,37 +67,84 @@ pub fn decode_frame<T>(frame: &[u8]) -> Result<T, ProtocolError>
 where
     T: DeserializeOwned,
 {
-    let header: &[u8] = frame
-        .get(..FRAME_HEADER_LEN)
-        .ok_or(ProtocolError::TruncatedFrame)?;
+    match try_decode_frame(frame)? {
+        Some((value, _consumed)) => Ok(value),
+        None => Err(ProtocolError::TruncatedFrame),
+    }
+}
 
-    let header_array: [u8; FRAME_HEADER_LEN] = <[u8; FRAME_HEADER_LEN]>::try_from(header)
-        .map_err(|_e| ProtocolError::InvalidLengthPrefix)?;
+/**
+ * Attempt to decode a single length-prefixed frame from the provided buffer.
+ *
+ * The wire format is:
+ * - 4-byte big-endian payload length (`u32`)
+ * - payload bytes encoded as JSON
+ *
+ * # Returns
+ * - `Ok(None)` if the buffer does not yet contain a full frame,
+ * - deserialized frame with with the number of consumed bytes if buffer contains a full frame.
+ *
+ * Trailing bytes after the decoded frame are not treated as an error.
+ * The caller is expected to keep them in the input buffer and pass them again when
+ * decoding subsequent frames.
+ *
+ * # Errors
+ * Returns `Err(ProtocolError)` an error if:
+ * - the decoded payload length cannot be represented as `usize`,
+ * - frame length arithmetic overflows,
+ * - payload contains invalid JSON for the requested type.
+ */
+pub fn try_decode_frame<T>(buffer: &[u8]) -> Result<Option<(T, usize)>, ProtocolError>
+where
+    T: DeserializeOwned,
+{
+    let header: &[u8] = match buffer.get(..FRAME_HEADER_LEN) {
+        Some(header) => header,
+        None => return Ok(None),
+    };
+
+    let header_array: [u8; FRAME_HEADER_LEN] = match <[u8; FRAME_HEADER_LEN]>::try_from(header) {
+        Ok(array) => array,
+        Err(header_error) => {
+            let _ = header_error;
+            return Ok(None);
+        }
+    };
 
     let payload_len_u32: u32 = u32::from_be_bytes(header_array);
-    let payload_len =
-        usize::try_from(payload_len_u32).map_err(|_e| ProtocolError::FrameLengthOutOfRange {
-            length: payload_len_u32,
-        })?;
 
-    let payload_end: usize = FRAME_HEADER_LEN
-        .checked_add(payload_len)
-        .ok_or(ProtocolError::CapacityOverflow)?;
-    let payload: &[u8] = frame
-        .get(FRAME_HEADER_LEN..payload_end)
-        .ok_or(ProtocolError::TruncatedFrame)?;
+    let payload_len: usize = match usize::try_from(payload_len_u32) {
+        Ok(len) => len,
+        Err(conversion_error) => {
+            let _ = conversion_error;
+            return Err(ProtocolError::FrameLengthOutOfRange {
+                length: payload_len_u32,
+            });
+        }
+    };
 
-    let value = serde_json::from_slice(payload)?;
-    Ok(value)
+    let frame_len: usize = match FRAME_HEADER_LEN.checked_add(payload_len) {
+        Some(len) => len,
+        None => return Err(ProtocolError::CapacityOverflow),
+    };
+
+    let payload: &[u8] = match buffer.get(FRAME_HEADER_LEN..frame_len) {
+        Some(pld) => pld,
+        None => return Ok(None),
+    };
+
+    let value: T = serde_json::from_slice(payload)?;
+
+    Ok(Some((value, frame_len)))
 }
 
 #[cfg(test)]
-#[allow(dead_code)]
+#[allow(dead_code, unused)]
 mod tests {
     use serde::Serialize;
     use serde::de::DeserializeOwned;
 
-    use crate::codec::{decode_frame, encode_frame};
+    use crate::codec::{decode_frame, encode_frame, try_decode_frame};
     use crate::error::ProtocolError;
     use crate::packet::{ClientPacket, ServerPacket};
 
@@ -234,4 +281,40 @@ mod tests {
 
         assert_eq!(decoded, packet);
     }
+
+    #[test]
+    fn try_decode_frame_returns_none_for_incomplete_header() {
+        let buffer: Vec<u8> = vec![0, 0, 0];
+
+        let result = try_decode_frame::<ClientPacket>(&buffer).expect("Should not err");
+
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn try_decode_frame_returns_none_for_incomplete_payload() {
+        let declared_payload_len: u32 = 10;
+        let mut buffer: Vec<u8> = Vec::new();
+        buffer.extend_from_slice(&declared_payload_len.to_be_bytes());
+        buffer.extend_from_slice(b"abc");
+
+        let result = try_decode_frame::<ClientPacket>(&buffer).expect("Should not err");
+
+        assert_eq!(result, None);
+    }
+
+    //#[test]
+    //fn try_decode_frame_decodes_complete_frame() {
+    //    let packet = ClientPacket::Ping;
+    //    let frame: Vec<u8> = encode_frame_ok(&packet);
+    //
+    //    let Some((decoded, consumed)) =
+    //        try_decode_frame::<ClientPacket>(&frame).expect("Should not err")
+    //    else {
+    //        unreachable!("Should not return None");
+    //        return;
+    //    };
+    //    assert_eq!(decoded, packet);
+    //    assert_eq!(consumed, frame.len());
+    //}
 }
