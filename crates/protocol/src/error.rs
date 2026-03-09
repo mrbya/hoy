@@ -1,3 +1,5 @@
+//! Hoy-protocol error definitions.
+
 use thiserror::Error;
 
 /// Errors produced by the Hoy protocol codec.
@@ -28,6 +30,16 @@ pub enum ProtocolError {
     /// Failed to compute a valid buffer capacity for a frame.
     #[error("Frame capacity overflow")]
     CapacityOverflow,
+
+    /// Attempt to discard an invalid number of bytes from a frame buffer.
+    #[error("Attempted to discard {count}B from buffer of length {buffer_len}")]
+    InvalidDiscard {
+        /// Requested discard size.
+        count: usize,
+
+        /// Current buffer length.
+        buffer_len: usize,
+    },
 
     /// Serialization or deserialization error.
     #[error("Serialization error: {0}")]

@@ -1,3 +1,5 @@
+//! Message stream codec module.
+
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 

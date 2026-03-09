@@ -67,5 +67,7 @@
 pub mod codec;
 /// Hoy-protocol error definitions.
 pub mod error;
+/// Wire frame buffer module.
+pub mod frame_buffer;
 /// Protocol packet definitions.
 pub mod packet;

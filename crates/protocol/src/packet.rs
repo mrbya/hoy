@@ -1,3 +1,5 @@
+//! Protocol packet definitions.
+
 use serde::{Deserialize, Serialize};
 
 /// Client-to-server protocol packets.
