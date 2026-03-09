@@ -12,6 +12,7 @@ fn integrate() {
 #[tokio::test]
 async fn client_can_connect_and_receive_welcome() {
     use std::time::Duration;
+
     use tokio::net::{TcpListener, TcpStream};
     use tokio::time::timeout;
 
