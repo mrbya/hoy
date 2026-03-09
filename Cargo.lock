@@ -293,7 +293,7 @@ dependencies = [
  "hoy-core",
  "hoy-net",
  "hoy-protocol",
- "hoy-test",
+ "hoy-test 0.0.0",
  "hoy-tui",
  "pretty_assertions",
  "serde_json",
@@ -321,6 +321,7 @@ name = "hoy-protocol"
 version = "0.0.1-pre1"
 dependencies = [
  "criterion",
+ "hoy-test 0.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -334,6 +335,12 @@ dependencies = [
  "criterion",
  "pretty_assertions",
 ]
+
+[[package]]
+name = "hoy-test"
+version = "0.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81b4b8ae0bf29a0a4f71394703ad5bcd675153a37b921f48d8c046d0b795170a"
 
 [[package]]
 name = "hoy-tui"

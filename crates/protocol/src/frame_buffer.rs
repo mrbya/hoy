@@ -148,6 +148,7 @@ impl FrameBuffer {
 #[cfg(test)]
 #[allow(dead_code, unused)]
 mod tests {
+    use hoy_test::assert_err;
     use serde::de::DeserializeOwned;
 
     use crate::codec::encode_frame;
@@ -280,6 +281,7 @@ mod tests {
         append_ok(&mut buffer, &[0, 0, 0, 4, b'b', b'a', b'd', b'!']);
 
         let error = try_decode_err::<ClientPacket>(&mut buffer, "Serde error");
+        assert_err!(error, ProtocolError::Serde(_));
     }
 
     #[test]
