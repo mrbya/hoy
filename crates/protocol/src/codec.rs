@@ -303,18 +303,71 @@ mod tests {
         assert_eq!(result, None);
     }
 
-    //#[test]
-    //fn try_decode_frame_decodes_complete_frame() {
-    //    let packet = ClientPacket::Ping;
-    //    let frame: Vec<u8> = encode_frame_ok(&packet);
-    //
-    //    let Some((decoded, consumed)) =
-    //        try_decode_frame::<ClientPacket>(&frame).expect("Should not err")
-    //    else {
-    //        unreachable!("Should not return None");
-    //        return;
-    //    };
-    //    assert_eq!(decoded, packet);
-    //    assert_eq!(consumed, frame.len());
-    //}
+    #[test]
+    fn try_decode_frame_decodes_complete_frame() {
+        let packet = ClientPacket::Ping;
+        let frame: Vec<u8> = encode_frame_ok(&packet);
+
+        let Some((decoded, consumed)) =
+            try_decode_frame::<ClientPacket>(&frame).expect("Should not err")
+        else {
+            unreachable!("Should not return None");
+            return;
+        };
+        assert_eq!(decoded, packet);
+        assert_eq!(consumed, frame.len());
+    }
+
+    #[test]
+    fn try_decode_frame_reports_consumed_len_with_trailing_bytes() {
+        let packet = ClientPacket::Ping;
+        let mut buffer: Vec<u8> = encode_frame_ok(&packet);
+        let frame_len: usize = buffer.len();
+        buffer.extend_from_slice(b"trailing bytes");
+
+        let Some((decoded, consumed)) =
+            try_decode_frame::<ClientPacket>(&buffer).expect("Should not err")
+        else {
+            unreachable!("Should not return None");
+            return;
+        };
+        assert_eq!(decoded, packet);
+        assert_eq!(consumed, frame_len);
+    }
+
+    #[test]
+    fn try_decode_frame_rejects_invalid_complete_payload() {
+        let buffer: Vec<u8> = build_frame(b"this is not a valid json");
+
+        let err = try_decode_frame::<ClientPacket>(&buffer).expect_err("Serde error expected.");
+
+        assert_err!(err, ProtocolError::Serde(_));
+    }
+
+    #[test]
+    fn try_decode_frame_only_decodes_1_frame() {
+        let packet1 = ClientPacket::Ping;
+        let packet2 = ClientPacket::Hello {
+            username: String::from("bruce_lee"),
+        };
+
+        let frame1 = encode_frame_ok(&packet1);
+        let frame2 = encode_frame_ok(&packet2);
+
+        let len1 = frame1.len();
+
+        let mut buffer: Vec<u8> = Vec::new();
+        buffer.extend_from_slice(&frame1);
+        buffer.extend_from_slice(&frame2);
+
+        let Some((decoded, consumed)) =
+            try_decode_frame::<ClientPacket>(&buffer).expect("Should not err.")
+        else {
+            unreachable!("Should not return None");
+            return;
+        };
+
+        assert_eq!(decoded, packet1);
+        assert_eq!(consumed, len1);
+    }
 }
