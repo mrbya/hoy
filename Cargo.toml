@@ -33,7 +33,7 @@ categories = ["command-line-utilities"]
 
 [package]
 name = "hoy"
-version = "0.0.1-pre1"
+version = "0.0.1-pre2"
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -66,6 +66,7 @@ thiserror.workspace = true
 [dev-dependencies]
 criterion = "0.8"
 pretty_assertions = "1"
+hoy-test = { version = "0.0.0", path = "crates/test" }
 
 [package.metadata.cargo-udeps.ignore]
 development = ["criterion", "pretty_assertions"]

@@ -286,13 +286,14 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hoy"
-version = "0.0.1-pre1"
+version = "0.0.1-pre2"
 dependencies = [
  "clap",
  "criterion",
  "hoy-core",
  "hoy-net",
  "hoy-protocol",
+ "hoy-test",
  "hoy-tui",
  "pretty_assertions",
  "serde_json",
@@ -324,6 +325,14 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "hoy-test"
+version = "0.0.0"
+dependencies = [
+ "criterion",
+ "pretty_assertions",
 ]
 
 [[package]]
