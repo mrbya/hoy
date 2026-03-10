@@ -1,20 +1,14 @@
-use std::{
-    io::{self, BufRead},
-    net::SocketAddr,
-    thread,
-};
+use std::io::{self, BufRead};
+use std::net::SocketAddr;
+use std::thread;
 
-use hoy_protocol::{
-    codec::encode_frame,
-    error::ProtocolError,
-    frame_buffer::FrameBuffer,
-    packet::{ClientPacket, ServerPacket},
-};
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
-    sync::mpsc,
-};
+use hoy_protocol::codec::encode_frame;
+use hoy_protocol::error::ProtocolError;
+use hoy_protocol::frame_buffer::FrameBuffer;
+use hoy_protocol::packet::{ClientPacket, ServerPacket};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
+use tokio::sync::mpsc;
 
 use crate::error::NetError;
 
@@ -43,82 +37,14 @@ const READ_BUFFER_SIZE: usize = 1024;
  */
 pub async fn run_temp_client(server_addr: SocketAddr, username: String) -> Result<(), NetError> {
     let stream = TcpStream::connect(server_addr).await?;
-    let (mut reader, mut writer) = stream.into_split();
+    let (reader, writer) = stream.into_split();
 
-    let (packet_tx, mut packet_rx) = mpsc::channel::<ClientPacket>(CLIENT_PACKET_CHANNEL_SIZE);
+    let (packet_tx, packet_rx) = mpsc::channel::<ClientPacket>(CLIENT_PACKET_CHANNEL_SIZE);
     let (line_tx, mut line_rx) = mpsc::unbounded_channel::<String>();
 
-    let input_thread = thread::spawn(move || {
-        let stdin = io::stdin();
-
-        loop {
-            let mut line = String::new();
-
-            let read_result = stdin.lock().read_line(&mut line);
-            let bytes_read: usize = match read_result {
-                Ok(bytes_read) => bytes_read,
-                Err(e) => {
-                    eprint!("Stdin read error: {e}");
-                    break;
-                }
-            };
-
-            if bytes_read == 0 {
-                break;
-            }
-
-            let trimmed: String = line.trim_end().to_owned();
-            let should_exit: bool = trimmed == "/quit" || trimmed == "/exit";
-
-            if line_tx.send(trimmed).is_err() {
-                break;
-            }
-
-            if should_exit {
-                break;
-            }
-        }
-    });
-
-    let writer_task = tokio::spawn(async move {
-        while let Some(packet) = packet_rx.recv().await {
-            let frame: Vec<u8> = encode_frame(&packet)?;
-            writer.write_all(&frame).await?;
-        }
-
-        Ok::<(), NetError>(())
-    });
-
-    let reader_task = tokio::spawn(async move {
-        let mut frame_buffer = FrameBuffer::with_capacity(4096);
-        let mut read_buffer: [u8; READ_BUFFER_SIZE] = [0; READ_BUFFER_SIZE];
-
-        loop {
-            let bytes_read: usize = reader.read(&mut read_buffer).await?;
-
-            if bytes_read == 0 {
-                println!("Server closed connection");
-                break;
-            }
-
-            let chunk: &[u8] = match read_buffer.get(..bytes_read) {
-                Some(ch) => ch,
-                None => return Err(NetError::Protocol(ProtocolError::TruncatedFrame)),
-            };
-
-            frame_buffer.append(chunk)?;
-
-            loop {
-                let Some(packet) = frame_buffer.try_decode::<ServerPacket>()? else {
-                    break;
-                };
-
-                print_server_packet(&packet);
-            }
-        }
-
-        Ok::<(), NetError>(())
-    });
+    let input_thread = spawn_input_thread(line_tx);
+    let writer_task = spawn_writer_task(writer, packet_rx);
+    let reader_task = spawn_reader_task(reader);
 
     packet_tx
         .send(ClientPacket::Hello { username })
@@ -170,6 +96,98 @@ pub async fn run_temp_client(server_addr: SocketAddr, username: String) -> Resul
     }
 
     Ok(())
+}
+
+/**
+ * Spawns the blocking stdin reader thread.
+ */
+fn spawn_input_thread(line_tx: mpsc::UnboundedSender<String>) -> thread::JoinHandle<()> {
+    thread::spawn(move || {
+        let stdin = io::stdin();
+
+        loop {
+            let mut line = String::new();
+
+            let read_result = stdin.lock().read_line(&mut line);
+            let bytes_read: usize = match read_result {
+                Ok(bytes_read) => bytes_read,
+                Err(e) => {
+                    eprint!("Stdin read error: {e}");
+                    break;
+                }
+            };
+
+            if bytes_read == 0 {
+                break;
+            }
+
+            let trimmed: String = line.trim_end().to_owned();
+            let should_exit: bool = trimmed == "/quit" || trimmed == "/exit";
+
+            if line_tx.send(trimmed).is_err() {
+                break;
+            }
+
+            if should_exit {
+                break;
+            }
+        }
+    })
+}
+
+/**
+ * Spawns the async packet writer task.
+ */
+fn spawn_writer_task(
+    mut writer: tokio::net::tcp::OwnedWriteHalf,
+    mut packet_rx: mpsc::Receiver<ClientPacket>,
+) -> tokio::task::JoinHandle<Result<(), NetError>> {
+    tokio::spawn(async move {
+        while let Some(packet) = packet_rx.recv().await {
+            let frame: Vec<u8> = encode_frame(&packet)?;
+            writer.write_all(&frame).await?;
+        }
+
+        Ok::<(), NetError>(())
+    })
+}
+
+/**
+ * Spawns the async packet reader task.
+ */
+fn spawn_reader_task(
+    mut reader: tokio::net::tcp::OwnedReadHalf,
+) -> tokio::task::JoinHandle<Result<(), NetError>> {
+    tokio::spawn(async move {
+        let mut frame_buffer = FrameBuffer::with_capacity(4096);
+        let mut read_buffer: [u8; READ_BUFFER_SIZE] = [0; READ_BUFFER_SIZE];
+
+        loop {
+            let bytes_read: usize = reader.read(&mut read_buffer).await?;
+
+            if bytes_read == 0 {
+                println!("Server closed connection");
+                break;
+            }
+
+            let chunk: &[u8] = match read_buffer.get(..bytes_read) {
+                Some(ch) => ch,
+                None => return Err(NetError::Protocol(ProtocolError::TruncatedFrame)),
+            };
+
+            frame_buffer.append(chunk)?;
+
+            loop {
+                let Some(packet) = frame_buffer.try_decode::<ServerPacket>()? else {
+                    break;
+                };
+
+                print_server_packet(&packet);
+            }
+        }
+
+        Ok::<(), NetError>(())
+    })
 }
 
 /**
