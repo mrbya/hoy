@@ -68,8 +68,13 @@ pub async fn run_temp_client(server_addr: SocketAddr, username: String) -> Resul
             }
 
             let trimmed: String = line.trim_end().to_owned();
+            let should_exit: bool = trimmed == "/quit" || trimmed == "/exit";
 
             if line_tx.send(trimmed).is_err() {
+                break;
+            }
+
+            if should_exit {
                 break;
             }
         }
