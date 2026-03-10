@@ -50,12 +50,11 @@ pub async fn run_temp_client(server_addr: SocketAddr, username: String) -> Resul
 
     let input_thread = thread::spawn(move || {
         let stdin = io::stdin();
-        let mut locked = stdin.lock();
 
         loop {
             let mut line = String::new();
 
-            let read_result = locked.read_line(&mut line);
+            let read_result = stdin.lock().read_line(&mut line);
             let bytes_read: usize = match read_result {
                 Ok(bytes_read) => bytes_read,
                 Err(e) => {
@@ -172,20 +171,27 @@ pub async fn run_temp_client(server_addr: SocketAddr, username: String) -> Resul
  * Prints received packet to stdout.
  */
 fn print_server_packet(packet: &ServerPacket) {
-    match packet {
-        ServerPacket::Welcome { username, room } => {
+    match *packet {
+        ServerPacket::Welcome {
+            ref username,
+            ref room,
+        } => {
             println!("Connected as {username} in {room}");
         }
 
-        ServerPacket::ChatMessage { from, room, text } => {
+        ServerPacket::ChatMessage {
+            ref from,
+            ref room,
+            ref text,
+        } => {
             println!("[{room}] {from}: {text}");
         }
 
-        ServerPacket::SystemMessage { text } => {
+        ServerPacket::SystemMessage { ref text } => {
             println!("* {text}");
         }
 
-        ServerPacket::Error { message } => {
+        ServerPacket::Error { ref message } => {
             println!("Server error: {message}");
         }
 
