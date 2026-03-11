@@ -67,6 +67,8 @@
 pub mod client;
 /// Id
 pub mod client_id;
+/// akafuka
+pub mod client_old;
 /// Command
 pub mod command;
 /// Connection
