@@ -9,15 +9,16 @@ A TUI real time messaging app inspired by accord.
 
 <!-- toc -->
 
+- [Installation](#installation)
 - [Usage](#usage)
   * [Starting the server](#starting-the-server)
   * [Connecting a client](#connecting-a-client)
   * [Chat commands](#chat-commands)
+- [Crates](#crates)
 - [Protocol](#protocol)
   * [Frame format](#frame-format)
   * [Client packets](#client-packets)
   * [Server packets](#server-packets)
-- [Crates](#crates)
 - [Similar projects](#similar-projects)
 - [License](#license)
 - [Contribution](#contribution)
