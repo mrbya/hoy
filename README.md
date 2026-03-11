@@ -35,6 +35,19 @@ cargo install hoy
 
 ## Usage
 
+Both the server and client currently share the same binary `hoy`:
+```bash
+Usage: hoy [OPTIONS]
+
+Options:
+  -s, --server               Run in server mode instead of client mode
+  -p, --port <PORT>          Port to bind the server or connect the client to [default: 7777]
+  -a, --address <IPV4>       Server address to connect to. [default: localhost]
+  -u, --username <USERNAME>  Client username (required in client mode)
+  -h, --help                 Print help
+  -V, --version              Print version
+```
+
 ### Starting the server
 
 Run in server mode with the `-s` flag. The default port is `7777`.

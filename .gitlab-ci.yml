@@ -10,7 +10,7 @@ variables:
 
 test:
   stage: test
-  artifatcs:
+  artifacts:
     paths:
       - coverage/
       - release/package/
