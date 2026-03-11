@@ -4,7 +4,7 @@ use hoy_protocol::codec::encode_frame;
 use hoy_protocol::error::ProtocolError;
 use hoy_protocol::frame_buffer::FrameBuffer;
 use hoy_protocol::packet::{ClientPacket, ServerPacket};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::sync::mpsc;
@@ -167,9 +167,26 @@ pub(crate) async fn spawn_session(
 
 /// Spawns background packet reader task.
 fn spawn_reader_task(
-    mut reader: OwnedReadHalf,
+    reader: OwnedReadHalf,
     internal_tx: mpsc::Sender<InternalEvent>,
 ) -> JoinHandle<Result<(), NetError>> {
+    spawn_reader_task_io(reader, internal_tx)
+}
+
+/**
+ * Spawns background packet reader task for generic async readers.
+ *
+ * # Arguments
+ * - `reader`: inbound stream used for packet frames,
+ * - `internal_tx`: internal event channel sender.
+ */
+fn spawn_reader_task_io<R>(
+    mut reader: R,
+    internal_tx: mpsc::Sender<InternalEvent>,
+) -> JoinHandle<Result<(), NetError>>
+where
+    R: AsyncRead + Unpin + Send + 'static,
+{
     tokio::spawn(async move {
         let mut frame_buffer = FrameBuffer::with_capacity(FRAME_BUFFER_CAPACITY);
         let mut read_buffer: [u8; READ_BUFFER_SIZE] = [0; READ_BUFFER_SIZE];
@@ -237,10 +254,29 @@ fn spawn_reader_task(
 
 /// Spawns background packet writer task
 fn spawn_writer_task(
-    mut writer: OwnedWriteHalf,
-    mut packet_rx: mpsc::Receiver<ClientPacket>,
+    writer: OwnedWriteHalf,
+    packet_rx: mpsc::Receiver<ClientPacket>,
     internal_tx: mpsc::Sender<InternalEvent>,
 ) -> JoinHandle<Result<(), NetError>> {
+    spawn_writer_task_io(writer, packet_rx, internal_tx)
+}
+
+/**
+ * Spawns background packet writer task for generic async writers.
+ *
+ * # Arguments
+ * - `writer`: outbound stream used for packet frames,
+ * - `packet_rx`: outgoing packet receiver,
+ * - `internal_tx`: internal event channel sender.
+ */
+fn spawn_writer_task_io<W>(
+    mut writer: W,
+    mut packet_rx: mpsc::Receiver<ClientPacket>,
+    internal_tx: mpsc::Sender<InternalEvent>,
+) -> JoinHandle<Result<(), NetError>>
+where
+    W: AsyncWrite + Unpin + Send + 'static,
+{
     tokio::spawn(async move {
         while let Some(packet) = packet_rx.recv().await {
             let frame: Vec<u8> = match encode_frame(&packet) {
@@ -279,5 +315,147 @@ async fn emit_internal_event(internal_tx: &mpsc::Sender<InternalEvent>, event: I
     let send_result = internal_tx.send(event).await;
     if let Err(e) = send_result {
         eprintln!("Internal event processing error: {e:?}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use hoy_protocol::codec::encode_frame;
+    use hoy_protocol::frame_buffer::FrameBuffer;
+    use hoy_protocol::packet::{ClientPacket, ServerPacket};
+    use hoy_test::async_ok;
+    use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt, DuplexStream};
+    use tokio::sync::mpsc;
+
+    use super::{InternalEvent, spawn_reader_task_io, spawn_writer_task_io};
+
+    struct IoHarness {
+        client: Option<DuplexStream>,
+        server: DuplexStream,
+    }
+
+    impl IoHarness {
+        fn connect() -> Self {
+            let (client, server) = tokio::io::duplex(4096);
+            Self {
+                client: Some(client),
+                server,
+            }
+        }
+
+        fn split_client(
+            &mut self,
+        ) -> (
+            tokio::io::ReadHalf<DuplexStream>,
+            tokio::io::WriteHalf<DuplexStream>,
+        ) {
+            tokio::io::split(self.client.take().expect("Client stream missing."))
+        }
+
+        fn server_mut(&mut self) -> &mut DuplexStream {
+            &mut self.server
+        }
+    }
+
+    async fn read_client_packet<R>(server: &mut R) -> Result<ClientPacket, ()>
+    where
+        R: AsyncRead + Unpin,
+    {
+        let mut buffer = [0_u8; 1024];
+        let mut frame_buffer = FrameBuffer::with_capacity(2048);
+
+        loop {
+            let bytes_read = async_ok!(200, server.read(&mut buffer)).map_err(|_err| ())?;
+            if bytes_read == 0 {
+                return Err(());
+            }
+
+            let chunk = buffer.get(..bytes_read).ok_or(())?;
+            frame_buffer.append(chunk).map_err(|_err| ())?;
+
+            if let Some(packet) = frame_buffer
+                .try_decode::<ClientPacket>()
+                .map_err(|_err| ())?
+            {
+                return Ok(packet);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn reader_task_emits_packet_received() -> Result<(), ()> {
+        let mut harness = IoHarness::connect();
+        let (reader, _writer) = harness.split_client();
+        let (internal_tx, mut internal_rx) = mpsc::channel(8);
+
+        let join = spawn_reader_task_io(reader, internal_tx);
+
+        let packet = ServerPacket::Pong;
+        let frame = encode_frame(&packet).map_err(|_err| ())?;
+        async_ok!(200, harness.server_mut().write_all(&frame)).map_err(|_err| ())?;
+        async_ok!(200, harness.server_mut().flush()).map_err(|_err| ())?;
+
+        let event = async_ok!(200, internal_rx.recv()).ok_or(())?;
+        match event {
+            InternalEvent::PacketReceived(decoded) => {
+                assert_eq!(decoded, ServerPacket::Pong);
+            }
+            _ => return Err(()),
+        }
+
+        drop(harness);
+        match async_ok!(200, join) {
+            Ok(Ok(())) => {}
+            _ => return Err(()),
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn reader_task_emits_connection_closed_on_eof() -> Result<(), ()> {
+        let mut harness = IoHarness::connect();
+        let (reader, _writer) = harness.split_client();
+        let (internal_tx, mut internal_rx) = mpsc::channel(8);
+
+        let join = spawn_reader_task_io(reader, internal_tx);
+
+        drop(harness);
+
+        let event = async_ok!(200, internal_rx.recv()).ok_or(())?;
+        match event {
+            InternalEvent::ConnectionClosed => {}
+            _ => return Err(()),
+        }
+
+        match async_ok!(200, join) {
+            Ok(Ok(())) => {}
+            _ => return Err(()),
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn writer_task_encodes_and_writes_packets() -> Result<(), ()> {
+        let mut harness = IoHarness::connect();
+        let (_reader, writer) = harness.split_client();
+        let (packet_tx, packet_rx) = mpsc::channel(8);
+        let (internal_tx, mut internal_rx) = mpsc::channel(8);
+
+        let join = spawn_writer_task_io(writer, packet_rx, internal_tx);
+
+        async_ok!(200, packet_tx.send(ClientPacket::Ping)).map_err(|_err| ())?;
+
+        let packet = read_client_packet(harness.server_mut()).await?;
+        assert_eq!(packet, ClientPacket::Ping);
+
+        drop(packet_tx);
+        match async_ok!(200, join) {
+            Ok(Ok(())) => {}
+            _ => return Err(()),
+        }
+
+        let unexpected = internal_rx.try_recv().ok();
+        assert!(unexpected.is_none());
+        Ok(())
     }
 }

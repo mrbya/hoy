@@ -133,14 +133,11 @@ impl ClientState {
 }
 
 #[cfg(test)]
-#[allow(dead_code, unused)]
 mod tests {
     use std::net::{Ipv4Addr, SocketAddr};
 
     use hoy_protocol::packet::ClientPacket;
-    use hoy_test::assert_matches;
-    use tokio::net::TcpStream;
-    use tokio::net::tcp::OwnedWriteHalf;
+    use hoy_test::{assert_matches, async_ok};
     use tokio::sync::mpsc;
 
     use crate::client::session::SessionHandle;
@@ -154,6 +151,15 @@ mod tests {
         let wt = tokio::spawn(async { Ok::<(), NetError>(()) });
 
         SessionHandle::new(tx, rt, wt)
+    }
+
+    fn session_with_rx() -> (SessionHandle, mpsc::Receiver<ClientPacket>) {
+        let (tx, rx) = mpsc::channel::<ClientPacket>(1);
+
+        let rt = tokio::spawn(async { Ok::<(), NetError>(()) });
+        let wt = tokio::spawn(async { Ok::<(), NetError>(()) });
+
+        (SessionHandle::new(tx, rt, wt), rx)
     }
 
     fn server_addr() -> SocketAddr {
@@ -248,5 +254,24 @@ mod tests {
         assert!(disconnected.take_session().is_none());
         assert!(awaiting_welcome.take_session().is_some());
         assert!(connected.take_session().is_some());
+    }
+
+    #[tokio::test]
+    async fn packet_tx_sends_when_session_present() -> Result<(), ()> {
+        let (session, mut rx) = session_with_rx();
+        let state = ClientState::AwaitingWelcome {
+            server_addr: server_addr(),
+            username: username(),
+            session,
+        };
+
+        let sender = state.packet_tx().ok_or(())?;
+        async_ok!(200, sender.send(ClientPacket::Ping)).map_err(|_err| ())?;
+
+        let received = async_ok!(200, rx.recv()).ok_or(())?;
+        assert_eq!(received, ClientPacket::Ping);
+
+        assert!(ClientState::Disconnected.packet_tx().is_none());
+        Ok(())
     }
 }

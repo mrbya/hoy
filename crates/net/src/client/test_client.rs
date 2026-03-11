@@ -157,44 +157,170 @@ async fn handle_input_line(
 
 /// Print a client event.
 fn print_client_event(event: &ClientEvent) {
+    println!("{}", format_client_event(event));
+}
+
+/**
+ * Formats a client event into a user-visible output string.
+ *
+ * # Arguments
+ * - `event`: client event to format.
+ */
+fn format_client_event(event: &ClientEvent) -> String {
     match *event {
         ClientEvent::Connecting {
             ref server_addr,
             ref username,
-        } => {
-            println!("Connecting to {server_addr} as {username}...");
-        }
+        } => format!("Connecting to {server_addr} as {username}..."),
 
         ClientEvent::Connected {
             ref server_addr,
             ref username,
             ref room,
-        } => {
-            println!("Connected to {server_addr} as {username} in {room}.");
-        }
+        } => format!("Connected to {server_addr} as {username} in {room}."),
 
-        ClientEvent::Disconnected => {
-            println!("Disconnected.");
-        }
+        ClientEvent::Disconnected => String::from("Disconnected."),
 
         ClientEvent::MessageReceived {
             ref from,
             ref room,
             ref text,
-        } => {
-            println!("[{room}] {from}: {text}");
+        } => format!("[{room}] {from}: {text}"),
+
+        ClientEvent::SystemMessage { ref text } => format!("* {text}"),
+
+        ClientEvent::Error { ref message } => format!("Error: {message}"),
+
+        ClientEvent::Pong => String::from("Pong!"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::SocketAddr;
+
+    use hoy_test::async_ok;
+    use tokio::time::{Duration, timeout};
+
+    use crate::client::core::{ClientEventStream, ClientHandle, spawn_client};
+    use crate::client::event::ClientEvent;
+    use crate::client::test_client::{FrontendAction, format_client_event, handle_input_line};
+
+    async fn recv_event_timeout(
+        event_stream: &mut ClientEventStream,
+        millis: u64,
+    ) -> Option<ClientEvent> {
+        let duration = Duration::from_millis(millis);
+        timeout(duration, event_stream.recv()).await.unwrap_or(None)
+    }
+
+    fn spawn_handle() -> (ClientHandle, ClientEventStream) {
+        spawn_client()
+    }
+
+    #[tokio::test]
+    async fn handle_input_line_quit_and_exit() -> Result<(), ()> {
+        let (handle, mut events) = spawn_handle();
+
+        let action_quit =
+            async_ok!(200, handle_input_line(&handle, String::from("/quit"))).map_err(|_err| ())?;
+        assert_eq!(action_quit, FrontendAction::Shutdown);
+        assert!(recv_event_timeout(&mut events, 50).await.is_none());
+
+        let action_exit =
+            async_ok!(200, handle_input_line(&handle, String::from("/exit"))).map_err(|_err| ())?;
+        assert_eq!(action_exit, FrontendAction::Shutdown);
+        assert!(recv_event_timeout(&mut events, 50).await.is_none());
+
+        async_ok!(200, handle.shutdown()).map_err(|_err| ())?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn handle_input_line_ping_disconnect_and_message_flow() -> Result<(), ()> {
+        let (handle, mut events) = spawn_handle();
+
+        let action_ping =
+            async_ok!(200, handle_input_line(&handle, String::from("/ping"))).map_err(|_err| ())?;
+        assert_eq!(action_ping, FrontendAction::Continue);
+        let ping_event = recv_event_timeout(&mut events, 200).await.ok_or(())?;
+        match ping_event {
+            ClientEvent::Error { message } => {
+                assert_eq!(message, "Client is not connected");
+            }
+            _ => return Err(()),
         }
 
-        ClientEvent::SystemMessage { ref text } => {
-            println!("* {text}");
+        let action_disconnect =
+            async_ok!(200, handle_input_line(&handle, String::from("/disconnect")))
+                .map_err(|_err| ())?;
+        assert_eq!(action_disconnect, FrontendAction::Continue);
+        assert!(recv_event_timeout(&mut events, 50).await.is_none());
+
+        let action_message =
+            async_ok!(200, handle_input_line(&handle, String::from("hello"))).map_err(|_err| ())?;
+        assert_eq!(action_message, FrontendAction::Continue);
+        let message_event = recv_event_timeout(&mut events, 200).await.ok_or(())?;
+        match message_event {
+            ClientEvent::Error { message } => {
+                assert_eq!(message, "Client is not connected");
+            }
+            _ => return Err(()),
         }
 
-        ClientEvent::Error { ref message } => {
-            println!("Error: {message}");
-        }
+        async_ok!(200, handle.shutdown()).map_err(|_err| ())?;
+        Ok(())
+    }
 
-        ClientEvent::Pong => {
-            println!("Pong!");
-        }
+    #[test]
+    fn format_client_event_outputs_expected_strings() {
+        let server_addr = SocketAddr::from(([127, 0, 0, 1], 4242));
+
+        assert_eq!(
+            format_client_event(&ClientEvent::Connecting {
+                server_addr,
+                username: String::from("bruce_lee"),
+            }),
+            "Connecting to 127.0.0.1:4242 as bruce_lee..."
+        );
+
+        assert_eq!(
+            format_client_event(&ClientEvent::Connected {
+                server_addr,
+                username: String::from("bruce_lee"),
+                room: String::from("#general"),
+            }),
+            "Connected to 127.0.0.1:4242 as bruce_lee in #general."
+        );
+
+        assert_eq!(
+            format_client_event(&ClientEvent::Disconnected),
+            "Disconnected."
+        );
+
+        assert_eq!(
+            format_client_event(&ClientEvent::MessageReceived {
+                from: String::from("bruce_lee"),
+                room: String::from("#general"),
+                text: String::from("hi"),
+            }),
+            "[#general] bruce_lee: hi"
+        );
+
+        assert_eq!(
+            format_client_event(&ClientEvent::SystemMessage {
+                text: String::from("welcome"),
+            }),
+            "* welcome"
+        );
+
+        assert_eq!(
+            format_client_event(&ClientEvent::Error {
+                message: String::from("oops"),
+            }),
+            "Error: oops"
+        );
+
+        assert_eq!(format_client_event(&ClientEvent::Pong), "Pong!");
     }
 }

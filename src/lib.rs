@@ -62,19 +62,3 @@
     clippy::unseparated_literal_suffix,
     clippy::verbose_file_reads
 )]
-
-/// Prints `Hoy`
-pub fn hoy() {
-    println!("Hoy!");
-}
-
-#[cfg(test)]
-#[allow(dead_code, unused)]
-mod tests {
-    use crate::hoy;
-
-    #[test]
-    fn test_hoy() {
-        hoy();
-    }
-}

@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::mem;
 use std::net::SocketAddr;
 
@@ -6,7 +7,7 @@ use tokio::sync::mpsc;
 
 use crate::client::command::ClientCommand;
 use crate::client::event::ClientEvent;
-use crate::client::session::{InternalEvent, spawn_session};
+use crate::client::session::{InternalEvent, SessionHandle, spawn_session};
 use crate::client::state::ClientState;
 use crate::error::NetError;
 
@@ -245,6 +246,30 @@ async fn handle_command(
     event_tx: &mpsc::Sender<ClientEvent>,
     internal_tx: &mpsc::Sender<InternalEvent>,
 ) -> bool {
+    handle_command_with_spawner(state, command, event_tx, internal_tx, spawn_session).await
+}
+
+/**
+ * Handles a client command using a custom session spawner.
+ *
+ * # Arguments
+ * - `state`: client state to mutate,
+ * - `command`: command to handle,
+ * - `event_tx`: ui-facing event channel stream,
+ * - `internal_tx`: internal event channel stream,
+ * - `spawn_session_fn`: session spawner used for Connect.
+ */
+async fn handle_command_with_spawner<F, Fut>(
+    state: &mut ClientState,
+    command: ClientCommand,
+    event_tx: &mpsc::Sender<ClientEvent>,
+    internal_tx: &mpsc::Sender<InternalEvent>,
+    spawn_session_fn: F,
+) -> bool
+where
+    F: FnOnce(SocketAddr, mpsc::Sender<InternalEvent>) -> Fut,
+    Fut: Future<Output = Result<SessionHandle, NetError>>,
+{
     match command {
         ClientCommand::Connect {
             server_addr,
@@ -266,7 +291,7 @@ async fn handle_command(
                 return false;
             }
 
-            let session = match spawn_session(server_addr, internal_tx.clone()).await {
+            let session = match spawn_session_fn(server_addr, internal_tx.clone()).await {
                 Ok(s) => s,
                 Err(e) => {
                     return emit_error(event_tx, &e.to_string()).await;
@@ -548,4 +573,280 @@ async fn shutdown_state(state: &mut ClientState) {
     };
 
     let _shutdown_result = session.shutdown().await;
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::SocketAddr;
+
+    use hoy_protocol::codec::encode_frame;
+    use hoy_protocol::frame_buffer::FrameBuffer;
+    use hoy_protocol::packet::{ClientPacket, ServerPacket};
+    use hoy_test::async_ok;
+    use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt, DuplexStream};
+    use tokio::sync::mpsc;
+
+    use super::{
+        ClientState, handle_command, handle_command_with_spawner, handle_internal_event,
+        shutdown_state,
+    };
+    use crate::client::command::ClientCommand;
+    use crate::client::event::ClientEvent;
+    use crate::client::session::{InternalEvent, SessionHandle};
+    use crate::error::NetError;
+
+    async fn read_client_packet<R>(stream: &mut R) -> Result<ClientPacket, ()>
+    where
+        R: AsyncRead + Unpin,
+    {
+        let mut buffer = [0_u8; 1024];
+        let mut frame_buffer = FrameBuffer::with_capacity(2048);
+
+        loop {
+            let bytes_read = async_ok!(200, stream.read(&mut buffer)).map_err(|_err| ())?;
+            if bytes_read == 0 {
+                return Err(());
+            }
+
+            let chunk = buffer.get(..bytes_read).ok_or(())?;
+            frame_buffer.append(chunk).map_err(|_err| ())?;
+
+            if let Some(packet) = frame_buffer
+                .try_decode::<ClientPacket>()
+                .map_err(|_err| ())?
+            {
+                return Ok(packet);
+            }
+        }
+    }
+
+    fn dummy_session() -> SessionHandle {
+        let (packet_tx, _packet_rx) = mpsc::channel(1);
+        let reader_task = tokio::spawn(async { Ok(()) });
+        let writer_task = tokio::spawn(async { Ok(()) });
+        SessionHandle::new(packet_tx, reader_task, writer_task)
+    }
+
+    fn session_with_stream() -> (SessionHandle, DuplexStream) {
+        let (client_side, server_side) = tokio::io::duplex(4096);
+        let (_reader, mut writer) = tokio::io::split(client_side);
+        let (packet_tx, mut packet_rx) = mpsc::channel(8);
+
+        let reader_task = tokio::spawn(async { Ok::<(), NetError>(()) });
+        let writer_task = tokio::spawn(async move {
+            while let Some(packet) = packet_rx.recv().await {
+                let frame = encode_frame(&packet).map_err(NetError::Protocol)?;
+                writer.write_all(&frame).await.map_err(NetError::Io)?;
+            }
+            Ok::<(), NetError>(())
+        });
+
+        (
+            SessionHandle::new(packet_tx, reader_task, writer_task),
+            server_side,
+        )
+    }
+
+    async fn recv_event(rx: &mut mpsc::Receiver<ClientEvent>) -> Option<ClientEvent> {
+        async_ok!(200, rx.recv())
+    }
+
+    #[tokio::test]
+    async fn connect_emits_connecting_sends_hello_and_sets_awaiting_welcome() -> Result<(), ()> {
+        let addr = SocketAddr::from(([127, 0, 0, 1], 5555));
+
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let (internal_tx, _internal_rx) = mpsc::channel(8);
+        let mut state = ClientState::default();
+
+        let (session, mut server_stream) = session_with_stream();
+        let mut session_opt = Some(session);
+
+        let command = ClientCommand::Connect {
+            server_addr: addr,
+            username: String::from("bruce_lee"),
+        };
+
+        let spawner = move |_addr, _internal| {
+            let spawned_session = session_opt.take().expect("session already taken");
+            async move { Ok(spawned_session) }
+        };
+
+        let should_continue = async_ok!(
+            200,
+            handle_command_with_spawner(&mut state, command, &event_tx, &internal_tx, spawner)
+        );
+        assert!(should_continue);
+
+        let event = recv_event(&mut event_rx).await.ok_or(())?;
+        match event {
+            ClientEvent::Connecting {
+                server_addr,
+                username,
+            } => {
+                assert_eq!(server_addr, addr);
+                assert_eq!(username, "bruce_lee");
+            }
+            _ => return Err(()),
+        }
+
+        let packet = read_client_packet(&mut server_stream).await?;
+        match packet {
+            ClientPacket::Hello { username } => {
+                assert_eq!(username, "bruce_lee");
+            }
+            _ => return Err(()),
+        }
+
+        assert!(state.is_awaiting_welcome());
+        shutdown_state(&mut state).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn welcome_packet_transitions_to_connected_and_emits_connected() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let mut state = ClientState::AwaitingWelcome {
+            server_addr: SocketAddr::from(([127, 0, 0, 1], 1234)),
+            username: String::from("requester"),
+            session: dummy_session(),
+        };
+
+        let internal_event = InternalEvent::PacketReceived(ServerPacket::Welcome {
+            username: String::from("bruce_lee"),
+            room: String::from("#general"),
+        });
+
+        let should_continue = async_ok!(
+            200,
+            handle_internal_event(&mut state, internal_event, &event_tx)
+        );
+        assert!(should_continue);
+
+        let event = recv_event(&mut event_rx).await.ok_or(())?;
+        match event {
+            ClientEvent::Connected {
+                server_addr,
+                username,
+                room,
+            } => {
+                assert_eq!(server_addr, SocketAddr::from(([127, 0, 0, 1], 1234)));
+                assert_eq!(username, "bruce_lee");
+                assert_eq!(room, "#general");
+            }
+            _ => return Err(()),
+        }
+
+        assert!(state.is_connected());
+        shutdown_state(&mut state).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn connection_error_emits_error_then_disconnected_and_resets_state() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let mut state = ClientState::Connected {
+            server_addr: SocketAddr::from(([127, 0, 0, 1], 1234)),
+            username: String::from("bruce_lee"),
+            room: String::from("#general"),
+            session: dummy_session(),
+        };
+
+        let internal_event = InternalEvent::ConnectionError {
+            message: String::from("bad connection"),
+        };
+
+        let should_continue = async_ok!(
+            200,
+            handle_internal_event(&mut state, internal_event, &event_tx)
+        );
+        assert!(should_continue);
+
+        let first = recv_event(&mut event_rx).await.ok_or(())?;
+        let second = recv_event(&mut event_rx).await.ok_or(())?;
+
+        match first {
+            ClientEvent::Error { message } => {
+                assert_eq!(message, "bad connection");
+            }
+            _ => return Err(()),
+        }
+
+        match second {
+            ClientEvent::Disconnected => {}
+            _ => return Err(()),
+        }
+
+        assert!(state.is_disconnected());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn connection_closed_emits_disconnected_and_resets_state() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let mut state = ClientState::Connected {
+            server_addr: SocketAddr::from(([127, 0, 0, 1], 1234)),
+            username: String::from("bruce_lee"),
+            room: String::from("#general"),
+            session: dummy_session(),
+        };
+
+        let should_continue = async_ok!(
+            200,
+            handle_internal_event(&mut state, InternalEvent::ConnectionClosed, &event_tx)
+        );
+        assert!(should_continue);
+
+        let event = recv_event(&mut event_rx).await.ok_or(())?;
+        match event {
+            ClientEvent::Disconnected => {}
+            _ => return Err(()),
+        }
+
+        assert!(state.is_disconnected());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn send_message_and_ping_while_disconnected_emit_errors() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let (internal_tx, _internal_rx) = mpsc::channel(8);
+        let mut state = ClientState::default();
+
+        let send_command = ClientCommand::SendMessage {
+            text: String::from("hi"),
+        };
+        let send_should_continue = async_ok!(
+            200,
+            handle_command(&mut state, send_command, &event_tx, &internal_tx)
+        );
+        assert!(send_should_continue);
+
+        let ping_command = ClientCommand::Ping;
+        let ping_should_continue = async_ok!(
+            200,
+            handle_command(&mut state, ping_command, &event_tx, &internal_tx)
+        );
+        assert!(ping_should_continue);
+
+        let first = recv_event(&mut event_rx).await.ok_or(())?;
+        let second = recv_event(&mut event_rx).await.ok_or(())?;
+
+        match first {
+            ClientEvent::Error { message } => {
+                assert_eq!(message, "Client is not connected");
+            }
+            _ => return Err(()),
+        }
+
+        match second {
+            ClientEvent::Error { message } => {
+                assert_eq!(message, "Client is not connected");
+            }
+            _ => return Err(()),
+        }
+
+        assert!(state.is_disconnected());
+        Ok(())
+    }
 }
