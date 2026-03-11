@@ -4,6 +4,7 @@
 .vscode
 .nvim
 .cache
+.claude
 
 # Cargo artefacts
 target

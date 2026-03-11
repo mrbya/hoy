@@ -1,15 +1,26 @@
 [workspace]
 members = [
     ".",
-    "lib/core",
-    "lib/net",
-    "lib/protocol",
-    "lib/tui",
+    "crates/core",
+    "crates/net",
+    "crates/protocol",
+    "crates/tui",
 ]
 
-[package]
-name = "hoy"
-version = "0.0.0-r3"
+[workspace.dependencies]
+hoy-core = { version = "0.0.1-pre1", path = "crates/core" }
+hoy-net = { version = "0.1.0", path = "crates/net"}
+hoy-protocol = { version = "0.1.0", path = "crates/protocol"}
+hoy-tui = { version = "0.0.1-pre1", path = "crates/tui" }
+hoy-test = { version = "0.1.0", path = "crates/test" }
+thiserror = "2.0.18"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+
+[workspace.package]
 authors = ["mrbya <v.toth.svk2@gmail.com>"]
 edition = "2024"
 rust-version = "1.85.0"
@@ -21,24 +32,45 @@ license = "MIT OR Apache-2.0"
 keywords = ["hoy", "chat"]
 categories = ["command-line-utilities"]
 
+[package]
+name = "hoy"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+# documentation.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Real-time messaging TUI app"
+
 publish = true
 
 [[bin]]
 name = "hoy"
 path = "src/main.rs"
 
+[features]
+full = []
+
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-hoy-core = { version = "0.0.0" }
-hoy-net = { version = "0.0.0" }
-hoy-protocol = { version = "0.0.0" }
-hoy-tui = { version = "0.0.0" }
+tokio.workspace = true
+hoy-core.workspace = true
+hoy-net.workspace = true
+hoy-protocol.workspace = true
+hoy-tui.workspace = true
+serde_json = "1.0.149"
+thiserror.workspace = true
 
 [dev-dependencies]
 criterion = "0.8"
 pretty_assertions = "1"
 
 [package.metadata.cargo-udeps.ignore]
+normal = ["hoy-core", "hoy-tui"]
 development = ["criterion", "pretty_assertions"]
 
 [package.metadata.playground]

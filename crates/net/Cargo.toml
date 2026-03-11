@@ -1,0 +1,32 @@
+[package]
+name = "hoy-net"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+# documentation.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Hoy real-time chat netGcrate"
+
+[dependencies]
+hoy-protocol.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+criterion = "0.8"
+pretty_assertions = "1"
+hoy-test.workspace = true
+
+[package.metadata.cargo-udeps.ignore]
+development = ["criterion", "pretty_assertions"]
+
+[package.metadata.playground]
+features = ["full"]
+
+[lints.clippy]
+multiple_crate_versions = "allow"

@@ -1,9 +1,10 @@
-//! Project-level documentation.
+//! Hoy-protocol documentation.
 
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::multiple_crate_versions)]
 // clippy WARN level lints
 #![warn(
-    missing_docs,
+    //missing_docs,
     //clippy::cargo,
     clippy::pedantic,
     clippy::nursery,
@@ -52,7 +53,6 @@
     clippy::rest_pat_in_fully_bound_structs,
     clippy::same_name_method,
     clippy::self_named_module_files,
-    clippy::separated_literal_suffix,
     clippy::shadow_unrelated,
     clippy::str_to_string,
     clippy::string_add,
@@ -62,3 +62,12 @@
     clippy::unseparated_literal_suffix,
     clippy::verbose_file_reads
 )]
+
+/// Message stream codec module.
+pub mod codec;
+/// Hoy-protocol error definitions.
+pub mod error;
+/// Wire frame buffer module.
+pub mod frame_buffer;
+/// Protocol packet definitions.
+pub mod packet;

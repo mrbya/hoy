@@ -1,0 +1,29 @@
+[package]
+name = "hoy-core"
+version = "0.0.1-pre1"
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+# documentation.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+description = "Hoy real-time chat core crate"
+
+[dependencies]
+
+[dev-dependencies]
+criterion = "0.8"
+pretty_assertions = "1"
+
+[package.metadata.cargo-udeps.ignore]
+development = ["criterion", "pretty_assertions"]
+
+[package.metadata.playground]
+features = ["full"]
+
+[lints.clippy]
+multiple_crate_versions = "allow"

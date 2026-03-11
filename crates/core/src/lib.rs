@@ -1,6 +1,7 @@
-//! Project-level documentation.
+//! Hoy-core documentation.
 
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::multiple_crate_versions)]
 // clippy WARN level lints
 #![warn(
     missing_docs,
@@ -52,7 +53,6 @@
     clippy::rest_pat_in_fully_bound_structs,
     clippy::same_name_method,
     clippy::self_named_module_files,
-    clippy::separated_literal_suffix,
     clippy::shadow_unrelated,
     clippy::str_to_string,
     clippy::string_add,
@@ -62,3 +62,10 @@
     clippy::unseparated_literal_suffix,
     clippy::verbose_file_reads
 )]
+
+/// hoy-core error types.
+pub mod error;
+/// hoy-core romm definitions.
+pub mod room;
+/// hoy-core user definitions.
+pub mod user;
