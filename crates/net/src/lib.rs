@@ -65,15 +65,7 @@
 
 /// Hoy client module.
 pub mod client;
-/// Id
-pub mod client_id;
-/// akafuka
-pub mod client_old;
-/// Command
-pub mod command;
-/// Connection
-pub mod connection;
-/// Hoy-net error definitions.
+/// Net errors
 pub mod error;
 /// Hoy server module.
 pub mod server;

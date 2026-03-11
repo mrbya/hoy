@@ -5,8 +5,8 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 
-use crate::client_id::ClientId;
-use crate::command::ServerCommand;
+use crate::server::client_id::ClientId;
+use crate::server::command::ServerCommand;
 use crate::error::NetError;
 
 /// Incomming channel read buffer size.
@@ -159,9 +159,9 @@ mod tests {
     use tokio::io::{self, AsyncReadExt, AsyncWriteExt, DuplexStream};
     use tokio::sync::mpsc;
 
-    use crate::client_id::ClientId;
-    use crate::command::ServerCommand;
-    use crate::connection::handle_connection_io;
+    use crate::server::client_id::ClientId;
+    use crate::server::command::ServerCommand;
+    use crate::server::connection::handle_connection_io;
 
     struct ConnectionHarness {
         client: Option<DuplexStream>,

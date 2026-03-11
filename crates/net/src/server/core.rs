@@ -5,9 +5,9 @@ use hoy_protocol::packet::{ClientPacket, ServerPacket};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
-use crate::client_id::ClientId;
-use crate::command::ServerCommand;
-use crate::connection::handle_connection;
+use crate::server::client_id::ClientId;
+use crate::server::command::ServerCommand;
+use crate::server::connection::handle_connection;
 use crate::error::NetError;
 
 /// Default room name.
@@ -306,9 +306,9 @@ mod tests {
     use hoy_test::async_ok;
     use tokio::sync::mpsc;
 
-    use crate::client_id::ClientId;
-    use crate::command::ServerCommand;
-    use crate::server::{
+    use crate::server::client_id::ClientId;
+    use crate::server::command::ServerCommand;
+    use crate::server::core::{
         ClientHandle, ServerState, handle_hello, handle_send_message, handle_server_command,
     };
 

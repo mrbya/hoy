@@ -1,10 +1,12 @@
-/** Client command types. */
+/// Client command types.
 pub mod command;
-/** Client core event loop and handles. */
+/// Client core event loop and handles.
 pub mod core;
-/** Client-facing events. */
+/// Client-facing events.
 pub mod event;
-/** Client session implementation. */
+/// Client session implementation.
 pub mod session;
-/** Client state machine. */
+/// Client state machine.
 pub mod state;
+/// Tiny stdio client impl to test client core and networking.
+pub mod test_client;

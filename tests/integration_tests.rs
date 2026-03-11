@@ -1,4 +1,4 @@
-use hoy_net::server::run_server;
+use hoy_net::server::core::run_server;
 use hoy_protocol::packet::ClientPacket;
 use pretty_assertions::assert_eq;
 

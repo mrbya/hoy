@@ -1,7 +1,7 @@
 use hoy_protocol::packet::{ClientPacket, ServerPacket};
 use tokio::sync::mpsc;
 
-use crate::client_id::ClientId;
+use crate::server::client_id::ClientId;
 
 /// Commands sent to the central server state taks.
 #[derive(Debug)]

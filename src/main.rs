@@ -1,7 +1,7 @@
 use std::net::{Ipv4Addr, SocketAddr};
 
 use clap::Parser;
-use hoy_net::client_old::run_temp_client;
+use hoy_net::{server::core::run_server, client::test_client::run_test_client};
 
 #[derive(Debug, Parser)]
 struct Cli {
@@ -21,13 +21,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST), args.port);
 
     if args.server {
-        hoy_net::server::run_server(addr).await?;
+        run_server(addr).await?;
     } else {
         let Some(username) = args.username else {
             eprintln!("No client username provided.");
             return Ok(());
         };
-        run_temp_client(addr, username.clone()).await?;
+        run_test_client(addr, username.clone()).await?;
     }
 
     Ok(())
