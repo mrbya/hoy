@@ -57,18 +57,3 @@ pub enum ClientEvent {
     /// Pong response from the connected server.
     Pong,
 }
-
-/// Internal client events
-pub enum InternalEvent {
-    /// Received packet.
-    PacketReceived(ServerPacket),
-
-    /// Connection to the server closed.
-    ConnectionClosed,
-
-    /// Connection erred out.
-    ConnectionError,
-
-    /// Writer task stopped.
-    WriterStopped,
-}

@@ -3,6 +3,8 @@ use std::net::SocketAddr;
 use hoy_protocol::packet::ClientPacket;
 use tokio::sync::mpsc;
 
+use crate::client::session::SessionHandle;
+
 /// Client status state.
 /**
  * Internal client state.
@@ -11,7 +13,7 @@ use tokio::sync::mpsc;
  * and tracks the lifecycle of the active client session.
  */
 #[derive(Debug)]
-pub enum ClientState {
+pub(crate) enum ClientState {
     /// Client disconnected - no active session.
     Disconnected,
 
@@ -22,8 +24,8 @@ pub enum ClientState {
         server_addr: SocketAddr,
         /// Requested username.
         username: String,
-        // Active network session handle.
-        // session: SessionHandle,
+        /// Active network session handle.
+        session: SessionHandle,
     },
 
     /// Client is connected (`Hello` -> `Welcome` handshake complete.)
@@ -34,8 +36,8 @@ pub enum ClientState {
         username: String,
         /// Currently active room.
         room: String,
-        // Active network session handle.
-        // session: SessionHandle,
+        /// Active network session handle.
+        session: SessionHandle,
     },
 }
 
@@ -92,6 +94,39 @@ impl ClientState {
         match self {
             Self::Connected { room, .. } => Some(room.as_str()),
             Self::AwaitingWelcome { .. } | Self::Disconnected => None,
+        }
+    }
+
+    /// Returns the outgoing packet channel of the active session, if any.
+    #[must_use]
+    pub fn packet_tx(&self) -> Option<&mpsc::Sender<ClientPacket>> {
+        match self {
+            Self::Disconnected => None,
+            Self::AwaitingWelcome { session, .. } | Self::Connected { session, .. } => {
+                Some(session.packet_tx())
+            }
+        }
+    }
+
+    /// Returns a mutable reference to the active session handle, if any.
+    #[must_use]
+    pub fn session_mut(&mut self) -> Option<&mut SessionHandle> {
+        match self {
+            Self::Disconnected => None,
+            Self::AwaitingWelcome { session, .. } | Self::Connected { session, .. } => {
+                Some(session)
+            }
+        }
+    }
+
+    /// Consume the current client state and return the owned session handle, if any.
+    #[must_use]
+    pub fn take_session(self) -> Option<SessionHandle> {
+        match self {
+            Self::Disconnected => None,
+            Self::AwaitingWelcome { session, .. } | Self::Connected { session, .. } => {
+                Some(session)
+            }
         }
     }
 }

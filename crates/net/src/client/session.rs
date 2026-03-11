@@ -1,5 +1,14 @@
+use std::net::SocketAddr;
+
+use hoy_protocol::codec::encode_frame;
+use hoy_protocol::error::ProtocolError;
+use hoy_protocol::frame_buffer::FrameBuffer;
 use hoy_protocol::packet::{ClientPacket, ServerPacket};
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
+use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
+use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 
 use crate::error::NetError;
 
@@ -84,5 +93,205 @@ impl SessionHandle {
         })
     }
 
-    //pub(crate) async fn shutdown(&mut self) -> Result<(), NetError> {}
+    /**
+     * Shuts down this session.
+     *
+     * This drops the outgoing packet sender, waits for the writer task
+     * to finish, and aborts the reader taks if still running.
+     *
+     * # Returns
+     * `Ok(())` on success.
+     *
+     * # Errors
+     * Returns `NetError` if:
+     * - writer task reports an error,
+     * - reader task fails to join,
+     * - writer task fails to abort/join.
+     */
+    pub(crate) async fn shutdown(self) -> Result<(), NetError> {
+        let Self {
+            packet_tx,
+            reader_task,
+            writer_task,
+        } = self;
+
+        drop(packet_tx);
+
+        match writer_task.await {
+            Ok(result) => result?,
+            Err(je) => {
+                return Err(NetError::ClientTaskJoin(je));
+            }
+        }
+
+        reader_task.abort();
+        match reader_task.await {
+            Ok(result) => result?,
+            Err(je) => {
+                if !je.is_cancelled() {
+                    return Err(NetError::ClientTaskJoin(je));
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/**
+ * Spawns a new TCP client session.
+ *
+ * Establishes a TCP connection, splits the sockets into owned read/write halves,
+ * and spawns the background reader and writer tasks associated with this session.
+ *
+ * # Returns
+ * Newly constructed `SessionHandle` on success.
+ *
+ * # Errors
+ * Returns `NetError` if a TCP connection cannot be established.
+ */
+pub(crate) async fn spawn_session(
+    server_addr: SocketAddr,
+    internal_tx: mpsc::Sender<InternalEvent>,
+) -> Result<SessionHandle, NetError> {
+    let stream = TcpStream::connect(server_addr).await?;
+    let (reader, writer) = stream.into_split();
+
+    let (packet_tx, packet_rx) = mpsc::channel::<ClientPacket>(CLIENT_PACKET_CHANNEL_SIZE);
+
+    let reader_task = spawn_reader_task(reader, internal_tx.clone());
+    let writer_task = spawn_writer_task(writer, packet_rx, internal_tx);
+
+    Ok(SessionHandle::new(packet_tx, reader_task, writer_task))
+}
+
+/// Spawns background packet reader task.
+fn spawn_reader_task(
+    mut reader: OwnedReadHalf,
+    internal_tx: mpsc::Sender<InternalEvent>,
+) -> JoinHandle<Result<(), NetError>> {
+    tokio::spawn(async move {
+        let mut frame_buffer = FrameBuffer::with_capacity(FRAME_BUFFER_CAPACITY);
+        let mut read_buffer: [u8; READ_BUFFER_SIZE] = [0; READ_BUFFER_SIZE];
+
+        loop {
+            let bytes_read: usize = match reader.read(&mut read_buffer).await {
+                Ok(bytes_read) => bytes_read,
+                Err(e) => {
+                    let message = e.to_string();
+                    emit_internal_event(
+                        &internal_tx,
+                        InternalEvent::ConnectionError { message: message },
+                    )
+                    .await;
+
+                    return Err(NetError::Io(e));
+                }
+            };
+
+            if bytes_read == 0 {
+                emit_internal_event(&internal_tx, InternalEvent::ConnectionClosed).await;
+                break;
+            }
+
+            let chunk: &[u8] = match read_buffer.get(..bytes_read) {
+                Some(ch) => ch,
+                None => {
+                    let protocol_error = ProtocolError::TruncatedFrame;
+                    let message = protocol_error.to_string();
+
+                    emit_internal_event(
+                        &internal_tx,
+                        InternalEvent::ConnectionError { message: message },
+                    )
+                    .await;
+
+                    return Err(NetError::Protocol(protocol_error));
+                }
+            };
+
+            if let Err(e) = frame_buffer.append(chunk) {
+                let message = e.to_string();
+
+                emit_internal_event(
+                    &internal_tx,
+                    InternalEvent::ConnectionError { message: message },
+                )
+                .await;
+
+                return Err(NetError::Protocol(e));
+            }
+
+            loop {
+                let packet = match frame_buffer.try_decode() {
+                    Ok(p) => p,
+                    Err(e) => {
+                        let message = e.to_string();
+
+                        emit_internal_event(
+                            &internal_tx,
+                            InternalEvent::ConnectionError { message: message },
+                        )
+                        .await;
+
+                        return Err(NetError::Protocol(e));
+                    }
+                };
+
+                let Some(pkt) = packet else {
+                    break;
+                };
+
+                emit_internal_event(&internal_tx, InternalEvent::PacketReceived(pkt)).await;
+            }
+        }
+        Ok(())
+    })
+}
+
+/// Spawns background packet writer task
+fn spawn_writer_task(
+    mut writer: OwnedWriteHalf,
+    mut packet_rx: mpsc::Receiver<ClientPacket>,
+    internal_tx: mpsc::Sender<InternalEvent>,
+) -> JoinHandle<Result<(), NetError>> {
+    tokio::spawn(async move {
+        while let Some(packet) = packet_rx.recv().await {
+            let frame: Vec<u8> = match encode_frame(&packet) {
+                Ok(f) => f,
+                Err(e) => {
+                    let message = e.to_string();
+
+                    emit_internal_event(
+                        &internal_tx,
+                        InternalEvent::ConnectionError { message: message },
+                    )
+                    .await;
+
+                    return Err(NetError::Protocol(e));
+                }
+            };
+
+            if let Err(e) = writer.write_all(&frame).await {
+                let message = e.to_string();
+
+                emit_internal_event(
+                    &internal_tx,
+                    InternalEvent::ConnectionError { message: message },
+                )
+                .await;
+
+                return Err(NetError::Io(e));
+            }
+        }
+
+        Ok(())
+    })
+}
+
+async fn emit_internal_event(internal_tx: &mpsc::Sender<InternalEvent>, event: InternalEvent) {
+    let send_result = internal_tx.send(event).await;
+    if let Err(e) = send_result {
+        eprintln!("Internal event processing error: {e:?}");
+    }
 }

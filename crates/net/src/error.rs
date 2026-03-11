@@ -1,5 +1,6 @@
 use hoy_protocol::error::ProtocolError;
 use thiserror::Error;
+use tokio::task::JoinError;
 
 /// Errors produced by hoy networking layer.
 #[derive(Debug, Error)]
@@ -19,4 +20,8 @@ pub enum NetError {
     /// Failed to send an outgoing packet to a connection writer task.
     #[error("Client channel closed")]
     ClientChannelClosed,
+
+    /// Client writer task failed to join.
+    #[error("Client task failed to join: {0}")]
+    ClientTaskJoin(#[from] JoinError),
 }

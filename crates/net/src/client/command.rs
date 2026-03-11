@@ -10,7 +10,7 @@ use std::net::SocketAddr;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClientCommand {
     /// Connect to a server and begin session handshake.
-    Commect {
+    Connect {
         /// Server address to connect to.
         server_addr: SocketAddr,
         /// Requested username.
