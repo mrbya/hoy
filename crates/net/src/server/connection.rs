@@ -5,9 +5,9 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 
+use crate::error::NetError;
 use crate::server::client_id::ClientId;
 use crate::server::command::ServerCommand;
-use crate::error::NetError;
 
 /// Incomming channel read buffer size.
 const READ_BUFFER_SIZE: usize = 1024;

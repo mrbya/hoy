@@ -1,8 +1,12 @@
-use std::{io::{self, BufRead}, net::SocketAddr, thread};
+use std::io::{self, BufRead};
+use std::net::SocketAddr;
+use std::thread;
 
 use tokio::sync::mpsc;
 
-use crate::{client::{core::{spawn_client, ClientEventStream, ClientHandle}, event::ClientEvent}, error::NetError};
+use crate::client::core::{ClientEventStream, ClientHandle, spawn_client};
+use crate::client::event::ClientEvent;
+use crate::error::NetError;
 
 /// Stdio frontend input channel receiver type.
 type InputRx = mpsc::UnboundedReceiver<String>;
@@ -87,12 +91,12 @@ enum FrontendAction {
 fn spawn_input_thread(line_tx: InputTx) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         let stdin = io::stdin();
-        let mut locked = stdin.lock();
 
         loop {
             let mut line = String::new();
 
-            let bytes_read: usize = match locked.read_line(&mut line) {
+            let read_result = stdin.lock().read_line(&mut line);
+            let bytes_read: usize = match read_result {
                 Ok(bytes) => bytes,
                 Err(e) => {
                     eprint!("Stdin read error: {e}");
@@ -127,7 +131,7 @@ fn spawn_input_thread(line_tx: InputTx) -> thread::JoinHandle<()> {
  */
 async fn handle_input_line(
     handle: &ClientHandle,
-    line: String
+    line: String,
 ) -> Result<FrontendAction, NetError> {
     if line.is_empty() {
         return Ok(FrontendAction::Continue);
@@ -153,32 +157,43 @@ async fn handle_input_line(
 
 /// Print a client event.
 fn print_client_event(event: &ClientEvent) {
-    match event {
-        &ClientEvent::Connecting { ref server_addr, ref username } => {
+    match *event {
+        ClientEvent::Connecting {
+            ref server_addr,
+            ref username,
+        } => {
             println!("Connecting to {server_addr} as {username}...");
         }
 
-        &ClientEvent::Connected { ref server_addr, ref username, ref room } => {
+        ClientEvent::Connected {
+            ref server_addr,
+            ref username,
+            ref room,
+        } => {
             println!("Connected to {server_addr} as {username} in {room}.");
         }
 
-        &ClientEvent::Disconnected => {
+        ClientEvent::Disconnected => {
             println!("Disconnected.");
         }
 
-        &ClientEvent::MessageReceived { ref from, ref room, ref text } => {
+        ClientEvent::MessageReceived {
+            ref from,
+            ref room,
+            ref text,
+        } => {
             println!("[{room}] {from}: {text}");
         }
 
-        &ClientEvent::SystemMessage { ref text } => {
+        ClientEvent::SystemMessage { ref text } => {
             println!("* {text}");
         }
 
-        &ClientEvent::Error { ref message } => {
+        ClientEvent::Error { ref message } => {
             println!("Error: {message}");
         }
 
-        &ClientEvent::Pong => {
+        ClientEvent::Pong => {
             println!("Pong!");
         }
     }

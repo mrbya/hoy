@@ -5,10 +5,10 @@ use hoy_protocol::packet::{ClientPacket, ServerPacket};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
+use crate::error::NetError;
 use crate::server::client_id::ClientId;
 use crate::server::command::ServerCommand;
 use crate::server::connection::handle_connection;
-use crate::error::NetError;
 
 /// Default room name.
 const DEFAULT_ROOM: &str = "#general";

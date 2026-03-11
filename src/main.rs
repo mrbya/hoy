@@ -1,7 +1,8 @@
 use std::net::{Ipv4Addr, SocketAddr};
 
 use clap::Parser;
-use hoy_net::{server::core::run_server, client::test_client::run_test_client};
+use hoy_net::client::test_client::run_test_client;
+use hoy_net::server::core::run_server;
 
 #[derive(Debug, Parser)]
 struct Cli {
