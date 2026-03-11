@@ -13,3 +13,10 @@ macro_rules! async_ok {
             .expect("Operation timed out.")
     };
 }
+
+#[macro_export]
+macro_rules! assert_matches {
+    ($act:expr, $exp:pat) => {
+        assert!(matches!($act, $exp));
+    };
+}

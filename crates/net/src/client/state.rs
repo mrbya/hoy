@@ -131,3 +131,122 @@ impl ClientState {
         }
     }
 }
+
+#[cfg(test)]
+#[allow(dead_code, unused)]
+mod tests {
+    use std::net::{Ipv4Addr, SocketAddr};
+
+    use hoy_protocol::packet::ClientPacket;
+    use hoy_test::assert_matches;
+    use tokio::net::TcpStream;
+    use tokio::net::tcp::OwnedWriteHalf;
+    use tokio::sync::mpsc;
+
+    use crate::client::session::SessionHandle;
+    use crate::client::state::ClientState;
+    use crate::error::NetError;
+
+    fn dummy_session() -> SessionHandle {
+        let (tx, _rx) = mpsc::channel::<ClientPacket>(1);
+
+        let rt = tokio::spawn(async { Ok::<(), NetError>(()) });
+        let wt = tokio::spawn(async { Ok::<(), NetError>(()) });
+
+        SessionHandle::new(tx, rt, wt)
+    }
+
+    fn server_addr() -> SocketAddr {
+        SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST), 0)
+    }
+
+    fn username() -> String {
+        String::from("bruce_lee")
+    }
+
+    fn room() -> String {
+        String::from("#general")
+    }
+
+    const fn disconnected() -> ClientState {
+        ClientState::Disconnected
+    }
+
+    fn awaiting_welcome() -> ClientState {
+        let server_addr = server_addr();
+        let username = username();
+        let session = dummy_session();
+
+        ClientState::AwaitingWelcome {
+            server_addr,
+            username,
+            session,
+        }
+    }
+
+    fn connected() -> ClientState {
+        let server_addr = server_addr();
+        let username = username();
+        let room = room();
+        let session = dummy_session();
+
+        ClientState::Connected {
+            server_addr,
+            username,
+            room,
+            session,
+        }
+    }
+
+    fn variants() -> (ClientState, ClientState, ClientState) {
+        (disconnected(), awaiting_welcome(), connected())
+    }
+
+    #[test]
+    fn state_defaults_to_disconnected() {
+        let state = ClientState::default();
+        assert_matches!(state, ClientState::Disconnected);
+    }
+
+    #[tokio::test]
+    async fn state_is_connected_and_disconnected() {
+        let (disconnected, awaiting_welcome, connected) = variants();
+
+        assert!(disconnected.is_disconnected());
+        assert!(!disconnected.is_awaiting_welcome());
+        assert!(!disconnected.is_connected());
+
+        assert!(!awaiting_welcome.is_disconnected());
+        assert!(awaiting_welcome.is_awaiting_welcome());
+        assert!(!awaiting_welcome.is_connected());
+
+        assert!(!connected.is_disconnected());
+        assert!(!connected.is_awaiting_welcome());
+        assert!(connected.is_connected());
+    }
+
+    #[tokio::test]
+    async fn state_value_extraction() {
+        let (mut disconnected, mut awaiting_welcome, mut connected) = variants();
+
+        assert_eq!(disconnected.server_addr(), None);
+        assert_eq!(awaiting_welcome.server_addr(), Some(server_addr()));
+        assert_eq!(connected.server_addr(), Some(server_addr()));
+
+        assert_eq!(disconnected.username(), None);
+        assert_eq!(awaiting_welcome.username(), Some(username()).as_deref());
+        assert_eq!(connected.username(), Some(username()).as_deref());
+
+        assert_eq!(disconnected.room(), None);
+        assert_eq!(awaiting_welcome.room(), None);
+        assert_eq!(connected.room(), Some(room()).as_deref());
+
+        assert!(disconnected.session_mut().is_none());
+        assert!(awaiting_welcome.session_mut().is_some());
+        assert!(connected.session_mut().is_some());
+
+        assert!(disconnected.take_session().is_none());
+        assert!(awaiting_welcome.take_session().is_some());
+        assert!(connected.take_session().is_some());
+    }
+}

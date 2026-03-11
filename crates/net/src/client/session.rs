@@ -56,7 +56,7 @@ pub(crate) struct SessionHandle {
 impl SessionHandle {
     /// Constructs a new session handle
     #[must_use]
-    const fn new(
+    pub(crate) const fn new(
         packet_tx: mpsc::Sender<ClientPacket>,
         reader_task: JoinHandle<Result<(), NetError>>,
         writer_task: JoinHandle<Result<(), NetError>>,
