@@ -125,7 +125,7 @@ impl ClientHandle {
     }
 }
 
-/// Frontend-facing event stream emmited by the client core.
+/// Frontend-facing event stream emitted by the client core.
 #[derive(Debug)]
 pub struct ClientEventStream {
     /// Client event receiver stream.
@@ -144,7 +144,7 @@ impl ClientEventStream {
      *
      * # Returns
      * - `Some(ClientEvent)` while the client core is active and events available,
-     * - `None` once the event stream is closed or no events emmited.
+     * - `None` once the event stream is closed or no events emitted.
      */
     pub async fn recv(&mut self) -> Option<ClientEvent> {
         self.event_rx.recv().await
@@ -258,6 +258,10 @@ async fn handle_command(
  * - `event_tx`: ui-facing event channel stream,
  * - `internal_tx`: internal event channel stream,
  * - `spawn_session_fn`: session spawner used for Connect.
+ *
+ * # Returns
+ * - `true` if client loop should continue running,
+ * - `false` if it should terminate.
  */
 async fn handle_command_with_spawner<F, Fut>(
     state: &mut ClientState,
@@ -528,11 +532,11 @@ async fn handle_server_packet(
  * Emits a single client event toward the frontend.
  *
  * # Arguments
- * - `event_tx`: Frontend event sender.
- * - `message`: Error text to emit.
+ * - `event_tx`: frontend event sender,
+ * - `event`: client event to emit.
  *
  * # Returns
- * - `true` if the event was delivered successfully
+ * - `true` if the event was delivered successfully,
  * - `false` otherwise.
  */
 async fn emit_event(event_tx: &mpsc::Sender<ClientEvent>, event: ClientEvent) -> bool {
@@ -540,11 +544,11 @@ async fn emit_event(event_tx: &mpsc::Sender<ClientEvent>, event: ClientEvent) ->
 }
 
 /**
- * Emmits a client-visible error event.
+ * Emits a client-visible error event.
  *
  * # Arguments
- * - `event_tx`: Frontend event sender.
- * - `message`: Error text to emit.
+ * - `event_tx`: frontend event sender,
+ * - `message`: error text to emit.
  *
  * # Returns
  * - `true` if the event was delivered successfully
@@ -563,6 +567,9 @@ async fn emit_error(event_tx: &mpsc::Sender<ClientEvent>, message: &str) -> bool
 /**
  * Shuts down the currently active client session, if any, and resets the state
  * to `Disconnected`.
+ *
+ * # Arguments
+ * - `state`: client state to reset.
  */
 async fn shutdown_state(state: &mut ClientState) {
     let previous_state = mem::take(state);

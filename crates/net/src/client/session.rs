@@ -19,10 +19,10 @@ const READ_BUFFER_SIZE: usize = 1024;
 /// Initial frame buffer capacity.
 const FRAME_BUFFER_CAPACITY: usize = 4096;
 
-/// Internal events emmited by session-side tasks toward the client core.
+/// Internal events emitted by session-side tasks toward the client core.
 #[derive(Debug)]
 pub(crate) enum InternalEvent {
-    /// Ap protocol packet was received from the server.
+    /// A protocol packet was received from the server.
     PacketReceived(ServerPacket),
 
     /// Server closed TCP connection.
@@ -165,7 +165,16 @@ pub(crate) async fn spawn_session(
     Ok(SessionHandle::new(packet_tx, reader_task, writer_task))
 }
 
-/// Spawns background packet reader task.
+/**
+ * Spawns the background packet reader task for a TCP connection.
+ *
+ * # Arguments
+ * - `reader`: owned read half of the TCP stream,
+ * - `internal_tx`: internal event channel sender.
+ *
+ * # Returns
+ * Join handle for the spawned reader task.
+ */
 fn spawn_reader_task(
     reader: OwnedReadHalf,
     internal_tx: mpsc::Sender<InternalEvent>,
@@ -179,6 +188,9 @@ fn spawn_reader_task(
  * # Arguments
  * - `reader`: inbound stream used for packet frames,
  * - `internal_tx`: internal event channel sender.
+ *
+ * # Returns
+ * Join handle for the spawned reader task.
  */
 fn spawn_reader_task_io<R>(
     mut reader: R,
@@ -252,7 +264,17 @@ where
     })
 }
 
-/// Spawns background packet writer task
+/**
+ * Spawns the background packet writer task for a TCP connection.
+ *
+ * # Arguments
+ * - `writer`: owned write half of the TCP stream,
+ * - `packet_rx`: outgoing packet receiver,
+ * - `internal_tx`: internal event channel sender.
+ *
+ * # Returns
+ * Join handle for the spawned writer task.
+ */
 fn spawn_writer_task(
     writer: OwnedWriteHalf,
     packet_rx: mpsc::Receiver<ClientPacket>,
@@ -268,6 +290,9 @@ fn spawn_writer_task(
  * - `writer`: outbound stream used for packet frames,
  * - `packet_rx`: outgoing packet receiver,
  * - `internal_tx`: internal event channel sender.
+ *
+ * # Returns
+ * Join handle for the spawned writer task.
  */
 fn spawn_writer_task_io<W>(
     mut writer: W,

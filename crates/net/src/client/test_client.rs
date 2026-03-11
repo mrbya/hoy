@@ -87,7 +87,18 @@ enum FrontendAction {
     Shutdown,
 }
 
-/// Spawns blocking stdin reader thread.
+/**
+ * Spawns a blocking stdin reader thread.
+ *
+ * Reads lines from stdin until EOF, `/quit`, or `/exit` is entered,
+ * forwarding each trimmed line into the provided channel.
+ *
+ * # Arguments
+ * - `line_tx`: unbounded sender for forwarding input lines.
+ *
+ * # Returns
+ * Join handle for the spawned blocking thread.
+ */
 fn spawn_input_thread(line_tx: InputTx) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         let stdin = io::stdin();
@@ -125,8 +136,15 @@ fn spawn_input_thread(line_tx: InputTx) -> thread::JoinHandle<()> {
 /**
  * Handles a frontend input line.
  *
- * # Errors
+ * # Arguments
+ * - `handle`: client handle for sending commands,
+ * - `line`: trimmed input line from stdin.
  *
+ * # Returns
+ * `FrontendAction` indicating whether the frontend loop should continue
+ * or shut down.
+ *
+ * # Errors
  * Returns `NetError` if an underlying client core command fails.
  */
 async fn handle_input_line(
@@ -155,7 +173,12 @@ async fn handle_input_line(
     Ok(FrontendAction::Continue)
 }
 
-/// Print a client event.
+/**
+ * Prints a formatted client event to stdout.
+ *
+ * # Arguments
+ * - `event`: client event to display.
+ */
 fn print_client_event(event: &ClientEvent) {
     println!("{}", format_client_event(event));
 }
@@ -165,6 +188,9 @@ fn print_client_event(event: &ClientEvent) {
  *
  * # Arguments
  * - `event`: client event to format.
+ *
+ * # Returns
+ * Formatted display string for the event.
  */
 fn format_client_event(event: &ClientEvent) -> String {
     match *event {

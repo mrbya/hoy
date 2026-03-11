@@ -29,11 +29,7 @@ pub enum ClientCommand {
     /// Heartbeat ping.
     Ping,
 
-    /**
-     * Shut down client core.
-     *
-     * As opposed to a simple `Disconnect`, it terminates the client core task
-     * instead of only closing the current network session.
-     */
+    /// Shut down client core. Unlike `Disconnect`, this terminates the client
+    /// core task instead of only closing the current network session.
     Shutdown,
 }
