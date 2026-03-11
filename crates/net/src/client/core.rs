@@ -20,13 +20,14 @@ const INTERNAL_EVENT_CHANNEL_SIZE: usize = 64;
 /// Frontend-facing handle used to control client core.
 #[derive(Debug, Clone)]
 pub struct ClientHandle {
+    /// Command sender into the client core event loop.
     command_tx: mpsc::Sender<ClientCommand>,
 }
 
 impl ClientHandle {
     /// Constructs a new client handle.
     #[must_use]
-    fn new(command_tx: mpsc::Sender<ClientCommand>) -> Self {
+    const fn new(command_tx: mpsc::Sender<ClientCommand>) -> Self {
         Self { command_tx }
     }
 
@@ -133,7 +134,7 @@ pub struct ClientEventStream {
 impl ClientEventStream {
     /// Constructs a new client event stream.
     #[must_use]
-    fn new(event_rx: mpsc::Receiver<ClientEvent>) -> Self {
+    const fn new(event_rx: mpsc::Receiver<ClientEvent>) -> Self {
         Self { event_rx }
     }
 
@@ -158,6 +159,7 @@ impl ClientEventStream {
  * - `ClientHandle`: command sender used by the frontend,
  * - `ClientEventStream`: event receiver consumed by the frontend.
  */
+#[must_use]
 pub fn spawn_client() -> (ClientHandle, ClientEventStream) {
     let (command_tx, command_rx) = mpsc::channel::<ClientCommand>(CLIENT_COMMAND_CHANNEL_SIZE);
     let (event_tx, event_rx) = mpsc::channel::<ClientEvent>(CLIENT_EVENT_CHANNEL_SIZE);
@@ -369,7 +371,7 @@ async fn handle_command(
  *
  * # Arguments
  * - `state`: client state to mutate,
- * - `internal_event`: internal_event to handle,
+ * - `internal_event`: `internal_event` to handle,
  * - `event_tx`: ui-facing event channel stream.
  *
  * # Returns

@@ -5,20 +5,23 @@ use tokio::sync::mpsc;
 
 use crate::client::session::SessionHandle;
 
-/// Client status state.
 /**
  * Internal client state.
  *
  * This state machine is owned exclusively by the client core event loop
  * and tracks the lifecycle of the active client session.
  */
-#[derive(Debug)]
+#[allow(dead_code)]
+#[derive(Debug, Default)]
 pub(crate) enum ClientState {
     /// Client disconnected - no active session.
+    #[default]
     Disconnected,
 
-    /// An active session exsists and the client has sent `Hello`, but
-    /// jas not recevied a `Welcome` acknowledgement from the server.
+    /**
+     * An active session exsists and the client has sent `Hello`, but
+     * has not recevied a `Welcome` acknowledgement from the server.
+     */
     AwaitingWelcome {
         /// Connected server address.
         server_addr: SocketAddr,
@@ -41,12 +44,7 @@ pub(crate) enum ClientState {
     },
 }
 
-impl Default for ClientState {
-    fn default() -> Self {
-        Self::Disconnected
-    }
-}
-
+#[allow(dead_code)]
 impl ClientState {
     /// Returns true if the client is currently disconnected.
     #[must_use]
@@ -70,9 +68,9 @@ impl ClientState {
     #[must_use]
     pub const fn server_addr(&self) -> Option<SocketAddr> {
         match self {
-            Self::Disconnected => None,
-            Self::AwaitingWelcome { server_addr, .. } | Self::Connected { server_addr, .. } => {
-                Some(*server_addr)
+            &Self::Disconnected => None,
+            &Self::AwaitingWelcome { server_addr, .. } | &Self::Connected { server_addr, .. } => {
+                Some(server_addr)
             }
         }
     }
@@ -81,8 +79,8 @@ impl ClientState {
     #[must_use]
     pub fn username(&self) -> Option<&str> {
         match self {
-            Self::Disconnected => None,
-            Self::AwaitingWelcome { username, .. } | Self::Connected { username, .. } => {
+            &Self::Disconnected => None,
+            &Self::AwaitingWelcome { ref username, .. } | &Self::Connected { ref username, .. } => {
                 Some(username.as_str())
             }
         }
@@ -91,18 +89,18 @@ impl ClientState {
     /// Returns the currently joined room, if any.
     #[must_use]
     pub fn room(&self) -> Option<&str> {
-        match self {
-            Self::Connected { room, .. } => Some(room.as_str()),
+        match *self {
+            Self::Connected { ref room, .. } => Some(room.as_str()),
             Self::AwaitingWelcome { .. } | Self::Disconnected => None,
         }
     }
 
     /// Returns the outgoing packet channel of the active session, if any.
     #[must_use]
-    pub fn packet_tx(&self) -> Option<&mpsc::Sender<ClientPacket>> {
+    pub const fn packet_tx(&self) -> Option<&mpsc::Sender<ClientPacket>> {
         match self {
-            Self::Disconnected => None,
-            Self::AwaitingWelcome { session, .. } | Self::Connected { session, .. } => {
+            &Self::Disconnected => None,
+            &Self::AwaitingWelcome { ref session, .. } | &Self::Connected { ref session, .. } => {
                 Some(session.packet_tx())
             }
         }
@@ -110,12 +108,15 @@ impl ClientState {
 
     /// Returns a mutable reference to the active session handle, if any.
     #[must_use]
-    pub fn session_mut(&mut self) -> Option<&mut SessionHandle> {
-        match self {
+    pub const fn session_mut(&mut self) -> Option<&mut SessionHandle> {
+        match *self {
             Self::Disconnected => None,
-            Self::AwaitingWelcome { session, .. } | Self::Connected { session, .. } => {
-                Some(session)
+            Self::AwaitingWelcome {
+                ref mut session, ..
             }
+            | Self::Connected {
+                ref mut session, ..
+            } => Some(session),
         }
     }
 

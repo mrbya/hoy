@@ -1,7 +1,5 @@
 use std::net::SocketAddr;
 
-use hoy_protocol::packet::ServerPacket;
-
 /**
  * Events emmited by the client core towards the frontend.
  *

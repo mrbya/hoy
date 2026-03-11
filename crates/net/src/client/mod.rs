@@ -1,5 +1,10 @@
+/** Client command types. */
 pub mod command;
+/** Client core event loop and handles. */
 pub mod core;
+/** Client-facing events. */
 pub mod event;
+/** Client session implementation. */
 pub mod session;
+/** Client state machine. */
 pub mod state;

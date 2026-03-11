@@ -179,11 +179,8 @@ fn spawn_reader_task(
                 Ok(bytes_read) => bytes_read,
                 Err(e) => {
                     let message = e.to_string();
-                    emit_internal_event(
-                        &internal_tx,
-                        InternalEvent::ConnectionError { message: message },
-                    )
-                    .await;
+                    emit_internal_event(&internal_tx, InternalEvent::ConnectionError { message })
+                        .await;
 
                     return Err(NetError::Io(e));
                 }
@@ -194,30 +191,19 @@ fn spawn_reader_task(
                 break;
             }
 
-            let chunk: &[u8] = match read_buffer.get(..bytes_read) {
-                Some(ch) => ch,
-                None => {
-                    let protocol_error = ProtocolError::TruncatedFrame;
-                    let message = protocol_error.to_string();
+            let Some(chunk) = read_buffer.get(..bytes_read) else {
+                let protocol_error = ProtocolError::TruncatedFrame;
+                let message = protocol_error.to_string();
 
-                    emit_internal_event(
-                        &internal_tx,
-                        InternalEvent::ConnectionError { message: message },
-                    )
-                    .await;
+                emit_internal_event(&internal_tx, InternalEvent::ConnectionError { message }).await;
 
-                    return Err(NetError::Protocol(protocol_error));
-                }
+                return Err(NetError::Protocol(protocol_error));
             };
 
             if let Err(e) = frame_buffer.append(chunk) {
                 let message = e.to_string();
 
-                emit_internal_event(
-                    &internal_tx,
-                    InternalEvent::ConnectionError { message: message },
-                )
-                .await;
+                emit_internal_event(&internal_tx, InternalEvent::ConnectionError { message }).await;
 
                 return Err(NetError::Protocol(e));
             }
@@ -230,7 +216,7 @@ fn spawn_reader_task(
 
                         emit_internal_event(
                             &internal_tx,
-                            InternalEvent::ConnectionError { message: message },
+                            InternalEvent::ConnectionError { message },
                         )
                         .await;
 
@@ -262,11 +248,8 @@ fn spawn_writer_task(
                 Err(e) => {
                     let message = e.to_string();
 
-                    emit_internal_event(
-                        &internal_tx,
-                        InternalEvent::ConnectionError { message: message },
-                    )
-                    .await;
+                    emit_internal_event(&internal_tx, InternalEvent::ConnectionError { message })
+                        .await;
 
                     return Err(NetError::Protocol(e));
                 }
@@ -275,11 +258,7 @@ fn spawn_writer_task(
             if let Err(e) = writer.write_all(&frame).await {
                 let message = e.to_string();
 
-                emit_internal_event(
-                    &internal_tx,
-                    InternalEvent::ConnectionError { message: message },
-                )
-                .await;
+                emit_internal_event(&internal_tx, InternalEvent::ConnectionError { message }).await;
 
                 return Err(NetError::Io(e));
             }
@@ -289,6 +268,13 @@ fn spawn_writer_task(
     })
 }
 
+/**
+ * Emit an internal event to the client core event loop.
+ *
+ * # Arguments
+ * - `internal_tx`: internal event sender.
+ * - `event`: event to forward.
+ */
 async fn emit_internal_event(internal_tx: &mpsc::Sender<InternalEvent>, event: InternalEvent) {
     let send_result = internal_tx.send(event).await;
     if let Err(e) = send_result {
