@@ -2,6 +2,7 @@
 [![crates.io](https://img.shields.io/crates/v/hoy.svg)](https://crates.io/crates/hoy)
 [![docs.rs](https://img.shields.io/docsrs/hoy)](https://docs.rs/hoy)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
+[![pipeline status](https://gitlab.com/byacrates/hoy/badges/master/pipeline.svg)](https://gitlab.com/byacrates/hoy/-/commits/master)
 
 A TUI real time messaging app inspired by accord.
 
