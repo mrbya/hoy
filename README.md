@@ -5,12 +5,11 @@
 
 A TUI real time messaging app inspired by accord.
 
-> 🔔 **Note:** This is just an initial pre-release to occupy the crate name.
-
 ## Index
 
 <!-- toc -->
 
+- [Crates](#crates)
 - [Similar projects](#similar-projects)
 - [License](#license)
 - [Contribution](#contribution)

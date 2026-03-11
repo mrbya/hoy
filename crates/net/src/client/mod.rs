@@ -2,7 +2,7 @@
 pub mod command;
 /// Client core event loop and handles.
 pub mod core;
-/// Client-facing events.
+/// Frontend-facing events.
 pub mod event;
 /// Client session implementation.
 pub mod session;
