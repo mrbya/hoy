@@ -3,6 +3,7 @@
 [![docs.rs](https://img.shields.io/docsrs/hoy)](https://docs.rs/hoy)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![pipeline status](https://gitlab.com/byacrates/hoy/badges/master/pipeline.svg)](https://gitlab.com/byacrates/hoy/-/commits/master)
+[![Coverage Status](https://coveralls.io/repos/gitlab/byacrates/hoy/badge.svg?branch=master)](https://coveralls.io/gitlab/byacrates/hoy?branch=master)
 
 A TUI real time messaging app inspired by accord.
 
