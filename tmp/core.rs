@@ -1,21 +1,113 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
-use hoy_core::store::{self, RoomName, ServerStore};
 use hoy_protocol::packet::{ClientPacket, ServerPacket};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
-use crate::error::{NetError, StateError};
+use crate::error::NetError;
 use crate::server::client_id::ClientId;
 use crate::server::command::ServerCommand;
 use crate::server::connection::handle_connection;
-use crate::server::state::ServerState;
 
 /// Default room name.
 const DEFAULT_ROOM: &str = "#general";
 /// Size of the server command channel buffer.
 const SERVER_COMMAND_CHANNEL_SIZE: usize = 128;
+
+/// Server client handle.
+#[derive(Debug)]
+struct ClientHandle {
+    /// Client username.
+    username: Option<String>,
+
+    /// Outgoing packet channel for the client.
+    tx: mpsc::Sender<ServerPacket>,
+}
+
+/// Server state.
+#[derive(Debug, Default)]
+struct ServerState {
+    /// Map of clients connected/known to server
+    clients: HashMap<ClientId, ClientHandle>,
+}
+
+impl ServerState {
+    /**
+     * Broadcasts a packet to all connected clients.
+     *
+     * # Arguments
+     * - `packet`: Packet to send to each client.
+     */
+    async fn broadcast(&self, packet: &ServerPacket) {
+        for client in self.clients.values() {
+            let send_result = client.tx.send(packet.clone()).await;
+            if let Err(e) = send_result {
+                eprintln!("Client channel send failed: {e}");
+            }
+        }
+    }
+
+    /**
+     * Sends a packet to a specific client.
+     *
+     * # Arguments
+     * - `client_id`: Target client identifier.
+     * - `packet`: Packet to send.
+     *
+     * # Returns
+     * `Ok(())` if the client channel accepts the packet.
+     *
+     * # Errors
+     * Returns `NetError::ClientChannelClosed` if the client is missing or closed.
+     */
+    async fn send_to_client(
+        &self,
+        client_id: ClientId,
+        packet: ServerPacket,
+    ) -> Result<(), NetError> {
+        let Some(client) = self.clients.get(&client_id) else {
+            return Err(NetError::ClientChannelClosed);
+        };
+
+        client.tx.send(packet).await.map_err(|e| {
+            let _ = e;
+            eprint!("Client channel send failed: {e}");
+            NetError::ClientChannelClosed
+        })
+    }
+
+    /**
+     * Returns the username for a client if it is initialized.
+     *
+     * # Arguments
+     * - `client_id`: Client identifier to look up.
+     *
+     * # Returns
+     * Username if present.
+     */
+    fn username_of(&self, client_id: &ClientId) -> Option<&str> {
+        self.clients
+            .get(client_id)
+            .and_then(|client| client.username.as_deref())
+    }
+
+    /**
+     * Checks whether a username is already in use.
+     *
+     * # Arguments
+     * - `username`: Candidate username to check.
+     *
+     * # Returns
+     * `true` if any client has the same username.
+     */
+    fn username_exists(&self, username: &str) -> bool {
+        self.clients
+            .values()
+            .filter_map(|client| client.username.as_deref())
+            .any(|existing| existing == username)
+    }
+}
 
 /**
  * Spawns the TCP accept loop and forwards connections into the server channel.
@@ -36,7 +128,7 @@ fn spawn_accept_loop(listener: TcpListener, server_tx: mpsc::Sender<ServerComman
                 break;
             };
 
-            let client_id = ClientId::new();
+            let client_id = ClientId::new(next_client_id);
             next_client_id = match next_client_id.checked_add(1) {
                 Some(id) => id,
                 None => break,
@@ -147,11 +239,7 @@ async fn handle_send_message(state: &ServerState, client_id: ClientId, text: Str
  * - `state`: Mutable server state.
  * - `command`: Command to process.
  */
-async fn handle_server_command(
-    state: &mut ServerState,
-    store: &mut impl ServerStore,
-    command: ServerCommand,
-) {
+async fn handle_server_command(state: &mut ServerState, command: ServerCommand) {
     match command {
         ServerCommand::Connected { client_id, tx } => {
             let _ = state
@@ -198,31 +286,13 @@ async fn handle_server_command(
  * - listening socket cannot be created,
  * - fails to accept new client connection.
  */
-pub async fn run_server(
-    bind_addr: SocketAddr,
-    mut store: impl ServerStore,
-) -> Result<(), NetError> {
+pub async fn run_server(bind_addr: SocketAddr) -> Result<(), NetError> {
     let listener = TcpListener::bind(bind_addr).await?;
     let (server_tx, mut server_rx) = mpsc::channel::<ServerCommand>(SERVER_COMMAND_CHANNEL_SIZE);
 
     spawn_accept_loop(listener, server_tx.clone());
 
     let mut state = ServerState::default();
-
-    match store.load_rooms() {
-        Ok(rooms) => {
-            for record in rooms {
-                state.ensure_room(record.name.clone());
-            }
-        }
-
-        Err(e) => return Err(NetError::InternalServerError(StateError::StoreError(e))),
-    }
-
-    let general = RoomName::new(DEFAULT_ROOM).expect("hardcoded nam is valid");
-    if let Err(e) = store.ensure_room(&general.clone()) {
-        return Err(NetError::InternalServerError(StateError::StoreError(e)));
-    }
 
     while let Some(command) = server_rx.recv().await {
         handle_server_command(&mut state, command).await;

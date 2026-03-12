@@ -6,3 +6,5 @@ pub mod command;
 pub mod connection;
 /// Server core event loop and handlers.
 pub mod core;
+/// Live server runtime state.
+pub mod state;

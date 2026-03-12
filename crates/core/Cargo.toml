@@ -14,10 +14,12 @@ categories.workspace = true
 description = "Hoy real-time chat core crate"
 
 [dependencies]
+thiserror.workspace = true
 
 [dev-dependencies]
 criterion = "0.8"
 pretty_assertions = "1"
+hoy-test.workspace = true
 
 [package.metadata.cargo-udeps.ignore]
 development = ["criterion", "pretty_assertions"]

@@ -311,7 +311,9 @@ name = "hoy-core"
 version = "0.0.1-pre1"
 dependencies = [
  "criterion",
+ "hoy-test",
  "pretty_assertions",
+ "thiserror",
 ]
 
 [[package]]
@@ -319,6 +321,7 @@ name = "hoy-net"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "hoy-core",
  "hoy-protocol",
  "hoy-test",
  "pretty_assertions",

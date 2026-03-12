@@ -65,7 +65,9 @@
 
 /// hoy-core error types.
 pub mod error;
-/// hoy-core romm definitions.
-pub mod room;
+/// In-memory `ServerStore` implementation.
+pub mod memory;
+/// Persistent storage.
+pub mod store;
 /// hoy-core user definitions.
 pub mod user;

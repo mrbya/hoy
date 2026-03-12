@@ -525,6 +525,11 @@ async fn handle_server_packet(
 
             emit_event(event_tx, ClientEvent::Pong).await
         }
+
+        other => {
+            eprintln!("{other:?} packet response not implemented yet.");
+            true
+        }
     }
 }
 
