@@ -360,99 +360,43 @@ where
         }
 
         ClientCommand::SendMessage { text } => {
-            if !state.is_connected() {
-                return emit_error(event_tx, "Client is not connected").await;
-            }
-
-            let Some(packet_tx) = state.packet_tx().cloned() else {
-                return emit_error(event_tx, "Client session is unavailable").await;
-            };
-
-            let send_result = packet_tx.send(ClientPacket::SendMessage { text }).await;
-            if let Err(e) = send_result {
-                let _ = e;
-                shutdown_state(state).await;
-
-                if !emit_error(event_tx, "Failed to send message to active session").await {
-                    return false;
-                }
-
-                emit_event(event_tx, ClientEvent::Disconnected).await
-            } else {
-                true
-            }
+            handle_generic_command(
+                state,
+                event_tx,
+                ClientPacket::SendMessage { text },
+                "Failed to send message to active session",
+            )
+            .await
         }
 
         ClientCommand::Ping => {
-            if !state.is_connected() {
-                return emit_error(event_tx, "Client is not connected").await;
-            }
-
-            let Some(packet_tx) = state.packet_tx().cloned() else {
-                return emit_error(event_tx, "Client session is unavailable").await;
-            };
-
-            let send_result = packet_tx.send(ClientPacket::Ping).await;
-            if let Err(e) = send_result {
-                let _ = e;
-                shutdown_state(state).await;
-
-                if !emit_error(event_tx, "Failed to send ping to active session").await {
-                    return false;
-                }
-
-                emit_event(event_tx, ClientEvent::Disconnected).await
-            } else {
-                true
-            }
+            handle_generic_command(
+                state,
+                event_tx,
+                ClientPacket::Ping,
+                "Failed to send ping to active session",
+            )
+            .await
         }
 
         ClientCommand::JoinRoom { room } => {
-            if !state.is_connected() {
-                return emit_error(event_tx, "Client is not connected").await;
-            }
-
-            let Some(packet_tx) = state.packet_tx().cloned() else {
-                return emit_error(event_tx, "Client session is unavailable").await;
-            };
-
-            let send_result = packet_tx.send(ClientPacket::JoinRoom { room }).await;
-            if let Err(e) = send_result {
-                let _ = e;
-                shutdown_state(state).await;
-
-                if !emit_error(event_tx, "Failed to send a request to join a room").await {
-                    return false;
-                }
-
-                emit_event(event_tx, ClientEvent::Disconnected).await
-            } else {
-                true
-            }
+            handle_generic_command(
+                state,
+                event_tx,
+                ClientPacket::JoinRoom { room },
+                "Failed to send a request to join a room",
+            )
+            .await
         }
 
         ClientCommand::ListRooms => {
-            if !state.is_connected() {
-                return emit_error(event_tx, "Client is not connected").await;
-            }
-
-            let Some(packet_tx) = state.packet_tx().cloned() else {
-                return emit_error(event_tx, "Client session is unavailable").await;
-            };
-
-            let send_result = packet_tx.send(ClientPacket::ListRooms).await;
-            if let Err(e) = send_result {
-                let _ = e;
-                shutdown_state(state).await;
-
-                if !emit_error(event_tx, "Failed to request a list of available rooms").await {
-                    return false;
-                }
-
-                emit_event(event_tx, ClientEvent::Disconnected).await
-            } else {
-                true
-            }
+            handle_generic_command(
+                state,
+                event_tx,
+                ClientPacket::ListRooms,
+                "Failed to request a list of available rooms",
+            )
+            .await
         }
 
         ClientCommand::Shutdown => {
@@ -465,6 +409,51 @@ where
 
             false
         }
+    }
+}
+
+/**
+ * Generic command handler that:
+ * 1. checks if client connected,
+ * 2. if client session available sends a packet
+ * 3. shutsdown state and disconnects client if fails.
+ *
+ * # Arguments
+ * - `state`: client state to mutate,
+ * - `event_tx`: ui-facing event channel stream,
+ * - `packet`: packet to send in response to command,
+ * - `message`: error message if execution fails.
+ *
+ * # Returns
+ * - `true` if client loop should continue running,
+ * - `false` if it should terminate.
+ */
+async fn handle_generic_command(
+    state: &mut ClientState,
+    event_tx: &mpsc::Sender<ClientEvent>,
+    packet: ClientPacket,
+    message: &str,
+) -> bool {
+    if !state.is_connected() {
+        return emit_error(event_tx, "Client is not connected").await;
+    }
+
+    let Some(packet_tx) = state.packet_tx().cloned() else {
+        return emit_error(event_tx, "Client session is unavailable").await;
+    };
+
+    let send_result = packet_tx.send(packet).await;
+    if let Err(e) = send_result {
+        let _ = e;
+        shutdown_state(state).await;
+
+        if !emit_error(event_tx, message).await {
+            return false;
+        }
+
+        emit_event(event_tx, ClientEvent::Disconnected).await
+    } else {
+        true
     }
 }
 
