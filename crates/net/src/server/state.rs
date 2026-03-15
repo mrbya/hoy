@@ -1,6 +1,6 @@
 //! Live server runtime state.
 //!
-//! [`ServerState`] is the *only* owner of mutable runtime data.  It lives
+//! [`ServerState`](state::ServerState) is the *only* owner of mutable runtime data.  It lives
 //! exclusively inside the central server task; no external task holds
 //! references to it.
 

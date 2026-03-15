@@ -70,7 +70,7 @@ criterion = "0.8"
 pretty_assertions = "1"
 
 [package.metadata.cargo-udeps.ignore]
-normal = ["hoy-core", "hoy-tui"]
+normal = ["hoy-tui"]
 development = ["criterion", "pretty_assertions"]
 
 [package.metadata.playground]

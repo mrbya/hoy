@@ -1,8 +1,9 @@
 //! Packet handlers and broadcast helpers for the central server loop.
 //!
-//! Each `handle_*` function corresponds to one [`ClientPacket`] variant.
-//! Helpers [`send_packet`], [`send_error`], and [`broadcast_to_room`] are
-//! shared utilities used across handlers.
+//! Each `handle_*` function corresponds to one
+//! [`ClientPacket`](hoy_protocol::packet::ClientPacket) variant.
+//! Helpers `send_packet`, `send_error`, and `broadcast_to_room` are shared
+//! utilities used across handlers.
 
 use std::collections::HashMap;
 
