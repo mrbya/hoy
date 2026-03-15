@@ -4,9 +4,10 @@ use std::{
 };
 
 /// Unique server-local identifier assigned to a connected client.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ClientId(u64);
 
+/// Populated client id tracker.
 static NEXT: AtomicU64 = AtomicU64::new(1);
 
 impl ClientId {
