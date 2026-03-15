@@ -112,6 +112,32 @@ impl ClientHandle {
     }
 
     /**
+     * Requests a [`ClientCommand::JoinRoom`] packet to be sent.
+     *
+     * # Returns
+     * `Ok(())` on request sending success.
+     *
+     * # Errors
+     * Returns `NetError` if client core is no longer accepting commands.
+     */
+    pub async fn join_room(&self, room: String) -> Result<(), NetError> {
+        self.send(ClientCommand::JoinRoom { room }).await
+    }
+
+    /**
+     * Requests a [`ClientCommand::ListRooms`] packet to be sent.
+     *
+     * # Returns
+     * `Ok(())` on request sending success.
+     *
+     * # Errors
+     * Returns `NetError` if client core is no longer accepting commands.
+     */
+    pub async fn list_rooms(&self) -> Result<(), NetError> {
+        self.send(ClientCommand::ListRooms).await
+    }
+
+    /**
      * Requests a shutdown of the client core.
      *
      * # Returns
@@ -381,6 +407,54 @@ where
             }
         }
 
+        ClientCommand::JoinRoom { room } => {
+            if !state.is_connected() {
+                return emit_error(event_tx, "Client is not connected").await;
+            }
+
+            let Some(packet_tx) = state.packet_tx().cloned() else {
+                return emit_error(event_tx, "Client session is unavailable").await;
+            };
+
+            let send_result = packet_tx.send(ClientPacket::JoinRoom { room }).await;
+            if let Err(e) = send_result {
+                let _ = e;
+                shutdown_state(state).await;
+
+                if !emit_error(event_tx, "Failed to send a request to join a room").await {
+                    return false;
+                }
+
+                emit_event(event_tx, ClientEvent::Disconnected).await
+            } else {
+                true
+            }
+        }
+
+        ClientCommand::ListRooms => {
+            if !state.is_connected() {
+                return emit_error(event_tx, "Client is not connected").await;
+            }
+
+            let Some(packet_tx) = state.packet_tx().cloned() else {
+                return emit_error(event_tx, "Client session is unavailable").await;
+            };
+
+            let send_result = packet_tx.send(ClientPacket::ListRooms).await;
+            if let Err(e) = send_result {
+                let _ = e;
+                shutdown_state(state).await;
+
+                if !emit_error(event_tx, "Failed to request a list of available rooms").await {
+                    return false;
+                }
+
+                emit_event(event_tx, ClientEvent::Disconnected).await
+            } else {
+                true
+            }
+        }
+
         ClientCommand::Shutdown => {
             let was_connected = !state.is_disconnected();
             shutdown_state(state).await;
@@ -526,9 +600,20 @@ async fn handle_server_packet(
             emit_event(event_tx, ClientEvent::Pong).await
         }
 
-        other => {
-            eprintln!("{other:?} packet response not implemented yet.");
-            true
+        ServerPacket::RoomJoined { room } => {
+            if state.is_disconnected() {
+                return true;
+            }
+
+            emit_event(event_tx, ClientEvent::RoomJoined { room }).await
+        }
+
+        ServerPacket::RoomList { rooms } => {
+            if state.is_disconnected() {
+                return true;
+            }
+
+            emit_event(event_tx, ClientEvent::RoomList { rooms }).await
         }
     }
 }

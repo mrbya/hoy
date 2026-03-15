@@ -52,6 +52,18 @@ pub enum ClientEvent {
         message: String,
     },
 
+    /// Succesfully joined a room.
+    RoomJoined {
+        /// Name of the room joined.
+        room: String,
+    },
+
+    /// Received list of available rooms.
+    RoomList {
+        /// List of available rooms.
+        rooms: Vec<String>,
+    },
+
     /// Pong response from the connected server.
     Pong,
 }

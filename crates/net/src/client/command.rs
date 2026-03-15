@@ -29,6 +29,15 @@ pub enum ClientCommand {
     /// Heartbeat ping.
     Ping,
 
+    /// Request to join or create a room.
+    JoinRoom {
+        /// Name of the room to join/create.
+        room: String,
+    },
+
+    /// Request to list available rooms.
+    ListRooms,
+
     /// Shut down client core. Unlike `Disconnect`, this terminates the client
     /// core task instead of only closing the current network session.
     Shutdown,

@@ -2,6 +2,7 @@ use std::io::{self, BufRead};
 use std::net::SocketAddr;
 use std::thread;
 
+use hoy_core::store::RoomName;
 use tokio::sync::mpsc;
 
 use crate::client::core::{ClientEventStream, ClientHandle, spawn_client};
@@ -169,6 +170,24 @@ async fn handle_input_line(
         return Ok(FrontendAction::Continue);
     }
 
+    if line == "/list" {
+        handle.list_rooms().await?;
+        return Ok(FrontendAction::Continue);
+    }
+
+    if line.starts_with("/room") {
+        let room = line.clone().split_off("/room".len()).trim().to_owned();
+        let Ok(name) = RoomName::new(&room) else {
+            print_client_event(&ClientEvent::Error {
+                message: format!("invalid room name: '{room}'"),
+            });
+            return Ok(FrontendAction::Continue);
+        };
+
+        handle.join_room(name.to_string()).await?;
+        return Ok(FrontendAction::Continue);
+    }
+
     handle.send_message(line).await?;
     Ok(FrontendAction::Continue)
 }
@@ -216,6 +235,10 @@ fn format_client_event(event: &ClientEvent) -> String {
         ClientEvent::SystemMessage { ref text } => format!("* {text}"),
 
         ClientEvent::Error { ref message } => format!("Error: {message}"),
+
+        ClientEvent::RoomJoined { ref room } => format!("* joined #{room}"),
+
+        ClientEvent::RoomList { ref rooms } => format!("* available rooms: {rooms:?}"),
 
         ClientEvent::Pong => String::from("Pong!"),
     }

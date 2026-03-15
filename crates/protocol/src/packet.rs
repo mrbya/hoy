@@ -25,6 +25,7 @@ pub enum ClientPacket {
         /// Name of the room client is requesting to join.
         room: String,
     },
+
     /// Request the list of all known rooms.
     ListRooms,
 }
