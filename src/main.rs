@@ -1,6 +1,7 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use clap::Parser;
+use hoy_core::memory::InMemoryStore;
 use hoy_net::client::test_client::run_test_client;
 use hoy_net::server::core::run_server;
 
@@ -58,8 +59,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         address = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST), args.port);
     }
 
+    let store = InMemoryStore::new();
+
     if args.server {
-        run_server(address).await?;
+        run_server(address, store).await?;
     } else {
         let Some(username) = args.username else {
             eprintln!("No client username provided.");
