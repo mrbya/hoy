@@ -214,14 +214,14 @@ async fn message_broadcast_reaches_all_clients() -> Result<(), ()> {
         .recv_until(BROADCAST_TIMEOUT_MS, |packet| {
             matches!(
                 packet,
-                ServerPacket::SystemMessage { text } if text == "bob joined general"
+                ServerPacket::SystemMessage { text } if text == "bob joined #general"
             )
         })
         .await?;
     assert_eq!(
         join_notice,
         ServerPacket::SystemMessage {
-            text: String::from("bob joined general"),
+            text: String::from("bob joined #general"),
         }
     );
 
