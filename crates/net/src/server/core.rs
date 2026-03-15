@@ -149,392 +149,395 @@ pub async fn run_server(
     Ok(())
 }
 
-//#[cfg(test)]
-//mod tests {
-//    use std::collections::HashMap;
-//
-//    use hoy_protocol::packet::{ClientPacket, ServerPacket};
-//    use hoy_test::async_ok;
-//    use tokio::sync::mpsc;
-//
-//    use crate::server::client_id::ClientId;
-//    use crate::server::command::ServerCommand;
-//    use crate::server::core::{
-//        ClientHandle, ServerState, handle_hello, handle_send_message, handle_server_command,
-//    };
-//
-//    struct TestHarness {
-//        state: ServerState,
-//        clients: HashMap<ClientId, mpsc::Receiver<ServerPacket>>,
-//    }
-//
-//    impl TestHarness {
-//        fn new() -> Self {
-//            Self {
-//                state: ServerState::default(),
-//                clients: HashMap::new(),
-//            }
-//        }
-//
-//        fn add_client(&mut self, id: u64, username: Option<&str>) -> ClientId {
-//            let (tx, rx) = mpsc::channel(8);
-//            let client_id = ClientId::new(id);
-//            let _previous = self.state.clients.insert(
-//                client_id.clone(),
-//                ClientHandle {
-//                    username: username.map(String::from),
-//                    tx,
-//                },
-//            );
-//            let _previous_rx = self.clients.insert(client_id.clone(), rx);
-//            client_id
-//        }
-//
-//        async fn recv(&mut self, client_id: &ClientId) -> Option<ServerPacket> {
-//            let rx = self
-//                .clients
-//                .get_mut(client_id)
-//                .expect("Client receiver missing.");
-//            async_ok!(200, rx.recv())
-//        }
-//
-//        fn try_recv_now(&mut self, client_id: &ClientId) -> Option<ServerPacket> {
-//            let rx = self
-//                .clients
-//                .get_mut(client_id)
-//                .expect("Client receiver missing.");
-//            rx.try_recv().ok()
-//        }
-//    }
-//
-//    #[tokio::test]
-//    async fn harness_can_receive_broadcasts() -> Result<(), ()> {
-//        let mut harness = TestHarness::new();
-//        let first = harness.add_client(1, Some("bruce_lee"));
-//        let second = harness.add_client(2, Some("ip_man"));
-//
-//        harness.state.broadcast(&ServerPacket::Pong).await;
-//
-//        let first_packet = harness.recv(&first).await.ok_or(())?;
-//        let second_packet = harness.recv(&second).await.ok_or(())?;
-//
-//        match (first_packet, second_packet) {
-//            (ServerPacket::Pong, ServerPacket::Pong) => Ok(()),
-//            _ => Err(()),
-//        }
-//    }
-//
-//    #[tokio::test]
-//    async fn handle_hello_registers_client_and_sends_welcome() -> Result<(), ()> {
-//        let mut harness = TestHarness::new();
-//        let client_id = harness.add_client(1, None);
-//        let observer_id = harness.add_client(2, Some("observer"));
-//
-//        async_ok!(
-//            200,
-//            handle_hello(
-//                &mut harness.state,
-//                client_id.clone(),
-//                String::from("bruce_lee")
-//            )
-//        );
-//
-//        let username = harness.state.username_of(&client_id);
-//        assert_eq!(username, Some("bruce_lee"));
-//
-//        let packet = harness
-//            .recv(&client_id)
-//            .await
-//            .expect("Packet reception failed unexpectedly");
-//
-//        match packet {
-//            ServerPacket::Welcome {
-//                username: name,
-//                room,
-//            } => {
-//                assert_eq!(name, "bruce_lee");
-//                assert_eq!(room, "#general");
-//                let observer_packet = harness
-//                    .recv(&observer_id)
-//                    .await
-//                    .expect("Observer reception failed unexpectedly.");
-//
-//                match observer_packet {
-//                    ServerPacket::SystemMessage { text } => {
-//                        assert_eq!(text, "bruce_lee joined #general");
-//                        Ok(())
-//                    }
-//                    _ => Err(()),
-//                }
-//            }
-//            _ => Err(()),
-//        }
-//    }
-//
-//    #[tokio::test]
-//    async fn handle_send_message_broadcasts_message() -> Result<(), ()> {
-//        let mut harness = TestHarness::new();
-//        let client_id = harness.add_client(1, Some("bruce_lee"));
-//
-//        async_ok!(
-//            200,
-//            handle_send_message(&harness.state, client_id.clone(), String::from("abcd"))
-//        );
-//
-//        let packet = harness
-//            .recv(&client_id)
-//            .await
-//            .expect("Packet reception failed unexpectedly.");
-//
-//        match packet {
-//            ServerPacket::ChatMessage { from, room, text } => {
-//                assert_eq!(from, "bruce_lee");
-//                assert_eq!(room, "#general");
-//                assert_eq!(text, "abcd");
-//                Ok(())
-//            }
-//            _ => Err(()),
-//        }
-//    }
-//
-//    #[tokio::test]
-//    async fn send_message_before_hello_returns_error() -> Result<(), ()> {
-//        let mut harness = TestHarness::new();
-//        let client_id = harness.add_client(1, None);
-//
-//        async_ok!(
-//            200,
-//            handle_send_message(&harness.state, client_id.clone(), String::from("hi"))
-//        );
-//
-//        let packet = harness
-//            .recv(&client_id)
-//            .await
-//            .expect("Packet reception failed unexpectedly.");
-//
-//        match packet {
-//            ServerPacket::Error { message } => {
-//                assert_eq!(message, "Client must say hello first");
-//                Ok(())
-//            }
-//            _ => Err(()),
-//        }
-//    }
-//
-//    #[tokio::test]
-//    async fn send_message_after_hello_broadcasts_to_all_clients() -> Result<(), ()> {
-//        let mut harness = TestHarness::new();
-//        let sender_id = harness.add_client(1, Some("bruce_lee"));
-//        let listener_id = harness.add_client(2, Some("ip_man"));
-//
-//        async_ok!(
-//            200,
-//            handle_send_message(&harness.state, sender_id.clone(), String::from("hello all"))
-//        );
-//
-//        let sender_packet = harness
-//            .recv(&sender_id)
-//            .await
-//            .expect("Sender reception failed unexpectedly.");
-//        let listener_packet = harness
-//            .recv(&listener_id)
-//            .await
-//            .expect("Listener reception failed unexpectedly.");
-//
-//        match (sender_packet, listener_packet) {
-//            (
-//                ServerPacket::ChatMessage { from, room, text },
-//                ServerPacket::ChatMessage {
-//                    from: other_from,
-//                    room: other_room,
-//                    text: other_text,
-//                },
-//            ) => {
-//                assert_eq!(from, "bruce_lee");
-//                assert_eq!(room, "#general");
-//                assert_eq!(text, "hello all");
-//                assert_eq!(other_from, "bruce_lee");
-//                assert_eq!(other_room, "#general");
-//                assert_eq!(other_text, "hello all");
-//                Ok(())
-//            }
-//            _ => Err(()),
-//        }
-//    }
-//
-//    #[tokio::test]
-//    async fn ping_sends_pong_to_requesting_client() -> Result<(), ()> {
-//        let mut harness = TestHarness::new();
-//        let client_id = harness.add_client(1, Some("bruce_lee"));
-//
-//        let command = ServerCommand::Packet {
-//            client_id: client_id.clone(),
-//            packet: ClientPacket::Ping,
-//        };
-//
-//        async_ok!(200, handle_server_command(&mut harness.state, command));
-//
-//        let packet = harness
-//            .recv(&client_id)
-//            .await
-//            .expect("Packet reception failed unexpectedly.");
-//
-//        match packet {
-//            ServerPacket::Pong => Ok(()),
-//            _ => Err(()),
-//        }
-//    }
-//
-//    #[tokio::test]
-//    async fn disconnect_with_username_broadcasts_left_message() -> Result<(), ()> {
-//        let mut harness = TestHarness::new();
-//        let leaver_id = harness.add_client(1, Some("bruce_lee"));
-//        let observer_id = harness.add_client(2, Some("ip_man"));
-//
-//        let command = ServerCommand::Disconnected {
-//            client_id: leaver_id.clone(),
-//        };
-//
-//        async_ok!(200, handle_server_command(&mut harness.state, command));
-//
-//        let observer_packet = harness
-//            .recv(&observer_id)
-//            .await
-//            .expect("Observer reception failed unexpectedly.");
-//
-//        match observer_packet {
-//            ServerPacket::SystemMessage { text } => {
-//                assert_eq!(text, "bruce_lee left #general");
-//                Ok(())
-//            }
-//            _ => Err(()),
-//        }
-//    }
-//
-//    #[tokio::test]
-//    async fn disconnect_without_username_has_no_broadcast() -> Result<(), ()> {
-//        let mut harness = TestHarness::new();
-//        let leaver_id = harness.add_client(1, None);
-//        let observer_id = harness.add_client(2, Some("ip_man"));
-//
-//        let command = ServerCommand::Disconnected {
-//            client_id: leaver_id.clone(),
-//        };
-//
-//        async_ok!(200, handle_server_command(&mut harness.state, command));
-//
-//        let observer_packet = harness.try_recv_now(&observer_id);
-//        assert!(observer_packet.is_none());
-//
-//        Ok(())
-//    }
-//
-//    #[tokio::test]
-//    async fn username_helpers_match_state() -> Result<(), ()> {
-//        let mut harness = TestHarness::new();
-//        let named_id = harness.add_client(1, Some("bruce_lee"));
-//        let unnamed_id = harness.add_client(2, None);
-//
-//        assert_eq!(harness.state.username_of(&named_id), Some("bruce_lee"));
-//        assert_eq!(harness.state.username_of(&unnamed_id), None);
-//        assert!(harness.state.username_exists("bruce_lee"));
-//        assert!(!harness.state.username_exists("ip_man"));
-//
-//        Ok(())
-//    }
-//
-//    #[tokio::test]
-//    async fn handle_hello_rejects_duplicate_for_same_client() -> Result<(), ()> {
-//        let mut harness = TestHarness::new();
-//        let client_id = harness.add_client(1, Some("bruce_lee"));
-//
-//        async_ok!(
-//            200,
-//            handle_hello(
-//                &mut harness.state,
-//                client_id.clone(),
-//                String::from("bruce_lee")
-//            )
-//        );
-//
-//        let packet = harness
-//            .recv(&client_id)
-//            .await
-//            .expect("Packet reception failed unexpectedly.");
-//
-//        match packet {
-//            ServerPacket::Error { message } => {
-//                assert_eq!(message, "client is already initialized");
-//                Ok(())
-//            }
-//            _ => Err(()),
-//        }
-//    }
-//
-//    #[tokio::test]
-//    async fn handle_hello_rejects_username_collision() -> Result<(), ()> {
-//        let mut harness = TestHarness::new();
-//        let _existing_id = harness.add_client(1, Some("bruce_lee"));
-//        let client_id = harness.add_client(2, None);
-//
-//        async_ok!(
-//            200,
-//            handle_hello(
-//                &mut harness.state,
-//                client_id.clone(),
-//                String::from("bruce_lee")
-//            )
-//        );
-//
-//        let packet = harness
-//            .recv(&client_id)
-//            .await
-//            .expect("Packet reception failed unexpectedly.");
-//
-//        match packet {
-//            ServerPacket::Error { message } => {
-//                assert_eq!(message, "Username is already in use");
-//                Ok(())
-//            }
-//            _ => Err(()),
-//        }
-//    }
-//
-//    #[tokio::test]
-//    async fn handle_server_command_handles_connected_and_disconnect() -> Result<(), ()> {
-//        let mut harness = TestHarness::new();
-//        let (tx, _rx) = mpsc::channel(8);
-//        let client_id = ClientId::new(2);
-//        let command_connect = ServerCommand::Connected {
-//            client_id: client_id.clone(),
-//            tx,
-//        };
-//
-//        async_ok!(
-//            200,
-//            handle_server_command(&mut harness.state, command_connect)
-//        );
-//
-//        let handle = harness
-//            .state
-//            .clients
-//            .get(&client_id)
-//            .expect("Handle retrieval failed unexpectedly.");
-//        assert_eq!(handle.username, None);
-//
-//        let command_disconnect = ServerCommand::Disconnected {
-//            client_id: client_id.clone(),
-//        };
-//
-//        async_ok!(
-//            200,
-//            handle_server_command(&mut harness.state, command_disconnect)
-//        );
-//
-//        let handle_none = harness.state.clients.get(&client_id);
-//        match handle_none {
-//            None => Ok(()),
-//            Some(_) => Err(()),
-//        }
-//    }
-//}
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use hoy_core::memory::InMemoryStore;
+    use hoy_core::store::{RoomName, ServerStore};
+    use hoy_protocol::packet::{ClientPacket, ServerPacket};
+    use hoy_test::async_ok;
+    use tokio::sync::mpsc;
+
+    use crate::server::client_id::ClientId;
+    use crate::server::command::ServerCommand;
+    use crate::server::core::{DEFAULT_ROOM, handle_server_command};
+    use crate::server::handlers::{
+        PendingClients, broadcast_to_room, handle_hello, handle_join_room, handle_list_rooms,
+        handle_send_message,
+    };
+    use crate::server::state::ServerState;
+
+    // ── Harness ───────────────────────────────────────────────────────────────
+
+    struct TestHarness {
+        state: ServerState,
+        pending: PendingClients,
+        store: InMemoryStore,
+        receivers: HashMap<ClientId, mpsc::Receiver<ServerPacket>>,
+    }
+
+    impl TestHarness {
+        fn new() -> Self {
+            let mut store = InMemoryStore::new();
+            let general = default_room();
+            store
+                .ensure_room(&general)
+                .expect("default room setup failed");
+            let mut state = ServerState::default();
+            state.ensure_room(general);
+            Self {
+                state,
+                pending: PendingClients::default(),
+                store,
+                receivers: HashMap::new(),
+            }
+        }
+
+        /// Adds a fully identified client directly into `state` (already past `Hello`).
+        fn add_identified_client(&mut self, username: &str) -> ClientId {
+            let (tx, rx) = mpsc::channel(8);
+            let id = ClientId::new();
+            self.state
+                .add_client(id, username.to_owned(), default_room(), tx)
+                .expect("test add_client failed");
+            let _ = self.receivers.insert(id, rx);
+            id
+        }
+
+        /// Adds a pending client (connected but not yet `Hello`'d).
+        fn add_pending_client(&mut self) -> ClientId {
+            let (tx, rx) = mpsc::channel(8);
+            let id = ClientId::new();
+            let _ = self.pending.insert(id, tx);
+            let _ = self.receivers.insert(id, rx);
+            id
+        }
+
+        /// Receives the next packet for `id`, timing out after 200 ms.
+        async fn recv(&mut self, id: ClientId) -> Option<ServerPacket> {
+            let rx = self.receivers.get_mut(&id).expect("receiver missing");
+            async_ok!(200, rx.recv())
+        }
+
+        /// Asserts no packet is immediately available for `id`.
+        fn assert_no_packet(&mut self, id: ClientId) {
+            let rx = self.receivers.get_mut(&id).expect("receiver missing");
+            assert!(
+                rx.try_recv().is_err(),
+                "expected no packet but one was pending"
+            );
+        }
+
+        /// Dispatches one command through the full [`handle_server_command`] path.
+        async fn dispatch(&mut self, command: ServerCommand) {
+            handle_server_command(
+                &mut self.state,
+                &mut self.store,
+                &mut self.pending,
+                &default_room(),
+                command,
+            )
+            .await;
+        }
+    }
+
+    fn default_room() -> RoomName {
+        RoomName::new(DEFAULT_ROOM).expect("hardcoded room name is valid")
+    }
+
+    // ── Hello ─────────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn hello_sends_welcome_and_broadcasts_join() -> Result<(), ()> {
+        let mut h = TestHarness::new();
+        let joiner = h.add_pending_client();
+        let observer = h.add_identified_client("observer");
+
+        async_ok!(
+            200,
+            handle_hello(
+                &mut h.state,
+                &mut h.pending,
+                joiner,
+                "alice".into(),
+                &default_room()
+            )
+        );
+
+        match h.recv(joiner).await.ok_or(())? {
+            ServerPacket::Welcome { username, room } => {
+                assert_eq!(username, "alice");
+                assert_eq!(room, DEFAULT_ROOM);
+            }
+            other => panic!("unexpected packet: {other:?}"),
+        }
+        match h.recv(observer).await.ok_or(())? {
+            ServerPacket::SystemMessage { text } => {
+                assert!(text.contains("alice"), "join message should mention alice");
+            }
+            other => panic!("unexpected packet: {other:?}"),
+        }
+        // The joiner must not receive the join broadcast about themselves.
+        h.assert_no_packet(joiner);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn hello_rejects_duplicate_for_same_client() -> Result<(), ()> {
+        let mut h = TestHarness::new();
+        let id = h.add_identified_client("bruce_lee");
+
+        async_ok!(
+            200,
+            handle_hello(
+                &mut h.state,
+                &mut h.pending,
+                id,
+                "bruce_lee".into(),
+                &default_room()
+            )
+        );
+
+        match h.recv(id).await.ok_or(())? {
+            ServerPacket::Error { .. } => Ok(()),
+            other => panic!("expected Error, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn hello_rejects_username_collision() -> Result<(), ()> {
+        let mut h = TestHarness::new();
+        let _existing = h.add_identified_client("bruce_lee");
+        let newcomer = h.add_pending_client();
+
+        async_ok!(
+            200,
+            handle_hello(
+                &mut h.state,
+                &mut h.pending,
+                newcomer,
+                "bruce_lee".into(),
+                &default_room()
+            )
+        );
+
+        match h.recv(newcomer).await.ok_or(())? {
+            ServerPacket::Error { message } => {
+                assert!(message.contains("already in use"));
+                Ok(())
+            }
+            other => panic!("expected Error, got {other:?}"),
+        }
+    }
+
+    // ── SendMessage ───────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn send_message_before_hello_produces_no_broadcast() -> Result<(), ()> {
+        let mut h = TestHarness::new();
+        let id = h.add_pending_client();
+
+        h.dispatch(ServerCommand::Packet {
+            client_id: id,
+            packet: ClientPacket::SendMessage { text: "hi".into() },
+        })
+        .await;
+
+        // Pending clients have no entry in state, so no packet is reachable.
+        h.assert_no_packet(id);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn send_message_broadcasts_to_room_members() -> Result<(), ()> {
+        let mut h = TestHarness::new();
+        let sender = h.add_identified_client("alice");
+        let receiver = h.add_identified_client("bob");
+
+        async_ok!(
+            200,
+            handle_send_message(&h.state, &mut h.store, sender, "hello".into())
+        );
+
+        match h.recv(sender).await.ok_or(())? {
+            ServerPacket::ChatMessage { from, text, .. } => {
+                assert_eq!(from, "alice");
+                assert_eq!(text, "hello");
+            }
+            other => panic!("unexpected packet for sender: {other:?}"),
+        }
+        match h.recv(receiver).await.ok_or(())? {
+            ServerPacket::ChatMessage { from, text, .. } => {
+                assert_eq!(from, "alice");
+                assert_eq!(text, "hello");
+            }
+            other => panic!("unexpected packet for receiver: {other:?}"),
+        }
+        Ok(())
+    }
+
+    // ── Ping ──────────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn ping_returns_pong_for_identified_client() -> Result<(), ()> {
+        let mut h = TestHarness::new();
+        let id = h.add_identified_client("alice");
+
+        h.dispatch(ServerCommand::Packet {
+            client_id: id,
+            packet: ClientPacket::Ping,
+        })
+        .await;
+
+        match h.recv(id).await.ok_or(())? {
+            ServerPacket::Pong => Ok(()),
+            other => panic!("expected Pong, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn ping_returns_pong_for_pending_client() -> Result<(), ()> {
+        let mut h = TestHarness::new();
+        let id = h.add_pending_client();
+
+        h.dispatch(ServerCommand::Packet {
+            client_id: id,
+            packet: ClientPacket::Ping,
+        })
+        .await;
+
+        match h.recv(id).await.ok_or(())? {
+            ServerPacket::Pong => Ok(()),
+            other => panic!("expected Pong, got {other:?}"),
+        }
+    }
+
+    // ── Disconnect ────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn disconnect_named_client_broadcasts_leave() -> Result<(), ()> {
+        let mut h = TestHarness::new();
+        let leaver = h.add_identified_client("alice");
+        let observer = h.add_identified_client("bob");
+
+        h.dispatch(ServerCommand::Disconnected { client_id: leaver })
+            .await;
+
+        match h.recv(observer).await.ok_or(())? {
+            ServerPacket::SystemMessage { text } => {
+                assert!(text.contains("alice"));
+                Ok(())
+            }
+            other => panic!("expected SystemMessage, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn disconnect_pending_client_does_not_broadcast() -> Result<(), ()> {
+        let mut h = TestHarness::new();
+        let observer = h.add_identified_client("bob");
+        let pending = h.add_pending_client();
+
+        h.dispatch(ServerCommand::Disconnected { client_id: pending })
+            .await;
+
+        h.assert_no_packet(observer);
+        Ok(())
+    }
+
+    // ── JoinRoom ──────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn join_room_sends_room_joined_and_broadcasts_leave() -> Result<(), ()> {
+        let mut h = TestHarness::new();
+        let joiner = h.add_identified_client("alice");
+        let observer = h.add_identified_client("bob");
+
+        async_ok!(
+            200,
+            handle_join_room(&mut h.state, &mut h.store, joiner, "rust".into())
+        );
+
+        match h.recv(joiner).await.ok_or(())? {
+            ServerPacket::RoomJoined { room } => assert_eq!(room, "rust"),
+            other => panic!("expected RoomJoined, got {other:?}"),
+        }
+        match h.recv(observer).await.ok_or(())? {
+            ServerPacket::SystemMessage { text } => {
+                assert!(text.contains("alice") && text.contains("left"));
+            }
+            other => panic!("expected SystemMessage (leave), got {other:?}"),
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn join_room_rejects_invalid_room_name() -> Result<(), ()> {
+        let mut h = TestHarness::new();
+        let id = h.add_identified_client("alice");
+
+        async_ok!(
+            200,
+            handle_join_room(&mut h.state, &mut h.store, id, "INVALID NAME!!".into())
+        );
+
+        match h.recv(id).await.ok_or(())? {
+            ServerPacket::Error { .. } => Ok(()),
+            other => panic!("expected Error, got {other:?}"),
+        }
+    }
+
+    // ── ListRooms ─────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn list_rooms_returns_sorted_room_names() -> Result<(), ()> {
+        let mut h = TestHarness::new();
+        let id = h.add_identified_client("alice");
+
+        async_ok!(
+            200,
+            handle_join_room(&mut h.state, &mut h.store, id, "zebra".into())
+        );
+        let _ = h.recv(id).await; // consume RoomJoined
+
+        async_ok!(200, handle_list_rooms(&h.state, id));
+
+        match h.recv(id).await.ok_or(())? {
+            ServerPacket::RoomList { rooms } => {
+                assert!(rooms.contains(&"general".to_owned()));
+                assert!(rooms.contains(&"zebra".to_owned()));
+                let mut sorted = rooms.clone();
+                sorted.sort();
+                assert_eq!(rooms, sorted, "rooms should be sorted");
+                Ok(())
+            }
+            other => panic!("expected RoomList, got {other:?}"),
+        }
+    }
+
+    // ── broadcast_to_room ─────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn broadcast_skips_excluded_client() -> Result<(), ()> {
+        let mut h = TestHarness::new();
+        let sender = h.add_identified_client("alice");
+        let receiver = h.add_identified_client("bob");
+
+        async_ok!(
+            200,
+            broadcast_to_room(
+                &h.state,
+                &default_room(),
+                &ServerPacket::SystemMessage {
+                    text: "test".into()
+                },
+                Some(sender),
+            )
+        );
+
+        h.assert_no_packet(sender);
+        assert!(h.recv(receiver).await.is_some());
+        Ok(())
+    }
+}
