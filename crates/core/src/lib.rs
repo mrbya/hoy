@@ -69,5 +69,3 @@ pub mod error;
 pub mod memory;
 /// Persistent storage.
 pub mod store;
-/// hoy-core user definitions.
-pub mod user;
