@@ -308,7 +308,7 @@ dependencies = [
 
 [[package]]
 name = "hoy-core"
-version = "0.0.1-pre1"
+version = "0.0.1"
 dependencies = [
  "criterion",
  "hoy-test",
@@ -318,7 +318,7 @@ dependencies = [
 
 [[package]]
 name = "hoy-net"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "criterion",
  "hoy-core",

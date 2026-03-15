@@ -8,8 +8,8 @@ members = [
 ]
 
 [workspace.dependencies]
-hoy-core = { version = "0.0.1-pre1", path = "crates/core" }
-hoy-net = { version = "0.1.0", path = "crates/net"}
+hoy-core = { version = "0.0.1", path = "crates/core" }
+hoy-net = { version = "0.2.0", path = "crates/net"}
 hoy-protocol = { version = "0.1.0", path = "crates/protocol"}
 hoy-tui = { version = "0.0.1-pre1", path = "crates/tui" }
 hoy-test = { version = "0.1.1", path = "crates/test" }

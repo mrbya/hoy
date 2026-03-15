@@ -6,45 +6,124 @@ Hoy chat app networking logic.
 
 ## Lib modules
 
-- `error`: networking errors
+- `error`: `NetError` and `StateError` types
 - `client`:
-    * `command`: client command types
-    * `core`: client core event loop and handles
-    * `event`: frontend-facing events
-    * `session`: client session implementation
-    * `state`: client state machine
-    * `test_client`: client impl with a tiny stdio frontend to test core and networking
+    * `command`: `ClientCommand` — frontend → client core
+    * `core`: client core event loop, `ClientHandle`, `ClientEventStream`
+    * `event`: `ClientEvent` — client core → frontend
+    * `session`: `SessionHandle`, reader/writer task plumbing
+    * `state`: `ClientState` state machine
+    * `test_client`: stdio-based test client exercising core and networking
 - `server`:
-    * `client_id`: tiny strongly-typed client identifier
-    * `command`: commands sent from nonnection tasks into the central server state loop
-    * `connection`: per-connection read/write task plumbing
-    * `core`: TCP listener, accept loop, central state loop and high-level orchestration
+    * `client_id`: strongly-typed `ClientId` (atomic `u64` counter)
+    * `command`: `ServerCommand` — connection tasks → central server loop
+    * `connection`: TCP accept loop and per-connection read/write tasks
+    * `core`: TCP listener, accept loop, central state loop, command dispatch
+    * `handlers`: packet handlers and broadcast helpers
+    * `state`: `ServerState`, `ClientHandle`, `RoomRuntimeState`
+
+---
 
 ## Client design
-- one owner of client state
-- one command input channel from UI
-- one event output channel towards UI
-- socket reader/writer tasks hidden behind this boundary
+
+- One task owns `ClientState` exclusively — no shared mutable state
+- One `ClientCommand` channel from the frontend (UI)
+- One `ClientEvent` channel toward the frontend
+- Reader and writer session tasks are hidden behind `SessionHandle`
+
+### Client state machine
+
+```
+Disconnected ──Connect──▶ AwaitingWelcome ──Welcome──▶ Connected
+     ▲                          │                          │
+     └──────────────────────────┴──Disconnect/Error────────┘
+```
+
+| State | Meaning |
+|---|---|
+| `Disconnected` | No active session |
+| `AwaitingWelcome` | TCP connected, `Hello` sent, waiting for `Welcome` |
+| `Connected` | Handshake complete; messages, room commands available |
+
+### Client commands (`ClientCommand`)
+
+| Command | Requires state | Effect |
+|---|---|---|
+| `Connect { server_addr, username }` | Disconnected | TCP connect → send Hello → AwaitingWelcome |
+| `Disconnect` | Any | Tear down session → Disconnected |
+| `SendMessage { text }` | Connected | Send `SendMessage` packet |
+| `Ping` | Connected | Send `Ping` packet |
+| `JoinRoom { room }` | Connected | Send `JoinRoom` packet |
+| `ListRooms` | Connected | Send `ListRooms` packet |
+| `Shutdown` | Any | Tear down session and exit client loop |
+
+### Client events (`ClientEvent`)
+
+| Event | Emitted when |
+|---|---|
+| `Connecting { server_addr, username }` | Connect command starts |
+| `Connected { server_addr, username, room }` | `Welcome` received |
+| `Disconnected` | Session ends or error occurs |
+| `MessageReceived { from, room, text }` | `ChatMessage` received |
+| `SystemMessage { text }` | `SystemMessage` received |
+| `RoomJoined { room }` | `RoomJoined` received |
+| `RoomList { rooms }` | `RoomList` received |
+| `Pong` | `Pong` received |
+| `Error { message }` | `Error` packet or local failure |
+
+---
 
 ## Server design
 
-- only one task owns chat state
-- connection tasks never mutate global state directly
-- connection tasks send commands into the server loop
-- server loop sends packets back to clients through per-client `mpsc::Sender<ServerPacket>` channel
+- One task owns all mutable chat state (`ServerState`) — serialised, no locks
+- Connection tasks never mutate global state directly
+- Connection tasks send `ServerCommand`s into the central server loop
+- The server loop sends `ServerPacket`s back through per-client `mpsc::Sender<ServerPacket>` channels
+- Rooms are persistent (backed by `ServerStore`) and hydrated on startup
+- The default room `#general` is always guaranteed to exist
+
+### Server state
+
+`ServerState` tracks:
+- **Identified clients** — username, current room, outgoing packet channel
+- **Room membership** — `HashSet<ClientId>` per room, always mirroring each client's `current_room`
+
+Clients go through two phases on the server:
+
+| Phase | Map | Can do |
+|---|---|---|
+| **Pending** | `PendingClients` | Receive `Pong` only |
+| **Identified** | `ServerState.clients` | Send messages, join/list rooms |
+
+---
 
 ## Protocol behaviour
 
-1. client connects
-2. 1st packet has to be `ClientPacket::Hello { username }`
-3. if 1st packet differs:
-    - send `ServerPacket::Error`
-    - disconnect
-4. after successfull hello:
-    - assign client to `#general`
-    - send `ServerPacket::Welcome`
-    - broadcast join message
-5. when client sends `SendMessage { text }`:
-    - broadcast to all connected clients
-6. when client disconnects:
-    - broadcast leave message
+### Handshake
+
+1. Client connects — assigned a `ClientId`, placed in `PendingClients`
+2. First packet must be `Hello { username }`
+   - On collision: `Error { "Username … is already in use" }` sent, client remains pending
+   - On success:
+     - Client moved from pending → identified in `#general`
+     - `Welcome { username, room: "general" }` sent to client
+     - `SystemMessage: "{username} joined #general"` broadcast to existing room members (sender excluded)
+3. `Ping` is answered with `Pong` even before `Hello`
+
+### Messaging
+
+- `SendMessage { text }` → `ChatMessage { from, room, text }` broadcast to **all** members of the sender's current room (including sender)
+- Messages are also persisted to the store (non-fatal on storage error)
+
+### Rooms
+
+- `JoinRoom { room }` (name validated; created if new):
+  - `SystemMessage: "{username} left #old_room"` broadcast to old room (all members)
+  - `RoomJoined { room }` sent to client
+  - `SystemMessage: "{username} joined #new_room"` broadcast to new room (sender excluded)
+- `ListRooms` → `RoomList { rooms }` sent to client (alphabetically sorted)
+
+### Disconnect
+
+- Client disconnect → removed from state
+  - If identified: `SystemMessage: "{username} left #{room}"` broadcast to the client's room
