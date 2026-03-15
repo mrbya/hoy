@@ -265,19 +265,16 @@ mod tests {
             )
         );
 
-        match h.recv(joiner).await.ok_or(())? {
-            ServerPacket::Welcome { username, room } => {
-                assert_eq!(username, "alice");
-                assert_eq!(room, DEFAULT_ROOM);
-            }
-            other => panic!("unexpected packet: {other:?}"),
-        }
-        match h.recv(observer).await.ok_or(())? {
-            ServerPacket::SystemMessage { text } => {
-                assert!(text.contains("alice"), "join message should mention alice");
-            }
-            other => panic!("unexpected packet: {other:?}"),
-        }
+        let ServerPacket::Welcome { username, room } = h.recv(joiner).await.ok_or(())? else {
+            return Err(());
+        };
+        assert_eq!(username, "alice");
+        assert_eq!(room, DEFAULT_ROOM);
+
+        let ServerPacket::SystemMessage { text } = h.recv(observer).await.ok_or(())? else {
+            return Err(());
+        };
+        assert!(text.contains("alice"), "join message should mention alice");
         // The joiner must not receive the join broadcast about themselves.
         h.assert_no_packet(joiner);
         Ok(())
@@ -299,10 +296,10 @@ mod tests {
             )
         );
 
-        match h.recv(id).await.ok_or(())? {
-            ServerPacket::Error { .. } => Ok(()),
-            other => panic!("expected Error, got {other:?}"),
-        }
+        let ServerPacket::Error { .. } = h.recv(id).await.ok_or(())? else {
+            return Err(());
+        };
+        Ok(())
     }
 
     #[tokio::test]
@@ -322,13 +319,11 @@ mod tests {
             )
         );
 
-        match h.recv(newcomer).await.ok_or(())? {
-            ServerPacket::Error { message } => {
-                assert!(message.contains("already in use"));
-                Ok(())
-            }
-            other => panic!("expected Error, got {other:?}"),
-        }
+        let ServerPacket::Error { message } = h.recv(newcomer).await.ok_or(())? else {
+            return Err(());
+        };
+        assert!(message.contains("already in use"));
+        Ok(())
     }
 
     // ── SendMessage ───────────────────────────────────────────────────────────
@@ -360,20 +355,27 @@ mod tests {
             handle_send_message(&h.state, &mut h.store, sender, "hello".into())
         );
 
-        match h.recv(sender).await.ok_or(())? {
-            ServerPacket::ChatMessage { from, text, .. } => {
-                assert_eq!(from, "alice");
-                assert_eq!(text, "hello");
-            }
-            other => panic!("unexpected packet for sender: {other:?}"),
-        }
-        match h.recv(receiver).await.ok_or(())? {
-            ServerPacket::ChatMessage { from, text, .. } => {
-                assert_eq!(from, "alice");
-                assert_eq!(text, "hello");
-            }
-            other => panic!("unexpected packet for receiver: {other:?}"),
-        }
+        let ServerPacket::ChatMessage {
+            from: sender_from,
+            text: sender_text,
+            ..
+        } = h.recv(sender).await.ok_or(())?
+        else {
+            return Err(());
+        };
+        assert_eq!(sender_from, "alice");
+        assert_eq!(sender_text, "hello");
+
+        let ServerPacket::ChatMessage {
+            from: receiver_from,
+            text: receiver_text,
+            ..
+        } = h.recv(receiver).await.ok_or(())?
+        else {
+            return Err(());
+        };
+        assert_eq!(receiver_from, "alice");
+        assert_eq!(receiver_text, "hello");
         Ok(())
     }
 
@@ -390,10 +392,10 @@ mod tests {
         })
         .await;
 
-        match h.recv(id).await.ok_or(())? {
-            ServerPacket::Pong => Ok(()),
-            other => panic!("expected Pong, got {other:?}"),
-        }
+        let ServerPacket::Pong = h.recv(id).await.ok_or(())? else {
+            return Err(());
+        };
+        Ok(())
     }
 
     #[tokio::test]
@@ -407,10 +409,10 @@ mod tests {
         })
         .await;
 
-        match h.recv(id).await.ok_or(())? {
-            ServerPacket::Pong => Ok(()),
-            other => panic!("expected Pong, got {other:?}"),
-        }
+        let ServerPacket::Pong = h.recv(id).await.ok_or(())? else {
+            return Err(());
+        };
+        Ok(())
     }
 
     // ── Disconnect ────────────────────────────────────────────────────────────
@@ -424,13 +426,11 @@ mod tests {
         h.dispatch(ServerCommand::Disconnected { client_id: leaver })
             .await;
 
-        match h.recv(observer).await.ok_or(())? {
-            ServerPacket::SystemMessage { text } => {
-                assert!(text.contains("alice"));
-                Ok(())
-            }
-            other => panic!("expected SystemMessage, got {other:?}"),
-        }
+        let ServerPacket::SystemMessage { text } = h.recv(observer).await.ok_or(())? else {
+            return Err(());
+        };
+        assert!(text.contains("alice"));
+        Ok(())
     }
 
     #[tokio::test]
@@ -459,16 +459,15 @@ mod tests {
             handle_join_room(&mut h.state, &mut h.store, joiner, "rust".into())
         );
 
-        match h.recv(joiner).await.ok_or(())? {
-            ServerPacket::RoomJoined { room } => assert_eq!(room, "rust"),
-            other => panic!("expected RoomJoined, got {other:?}"),
-        }
-        match h.recv(observer).await.ok_or(())? {
-            ServerPacket::SystemMessage { text } => {
-                assert!(text.contains("alice") && text.contains("left"));
-            }
-            other => panic!("expected SystemMessage (leave), got {other:?}"),
-        }
+        let ServerPacket::RoomJoined { room } = h.recv(joiner).await.ok_or(())? else {
+            return Err(());
+        };
+        assert_eq!(room, "rust");
+
+        let ServerPacket::SystemMessage { text } = h.recv(observer).await.ok_or(())? else {
+            return Err(());
+        };
+        assert!(text.contains("alice") && text.contains("left"));
         Ok(())
     }
 
@@ -482,10 +481,10 @@ mod tests {
             handle_join_room(&mut h.state, &mut h.store, id, "INVALID NAME!!".into())
         );
 
-        match h.recv(id).await.ok_or(())? {
-            ServerPacket::Error { .. } => Ok(()),
-            other => panic!("expected Error, got {other:?}"),
-        }
+        let ServerPacket::Error { .. } = h.recv(id).await.ok_or(())? else {
+            return Err(());
+        };
+        Ok(())
     }
 
     // ── ListRooms ─────────────────────────────────────────────────────────────
@@ -503,17 +502,15 @@ mod tests {
 
         async_ok!(200, handle_list_rooms(&h.state, id));
 
-        match h.recv(id).await.ok_or(())? {
-            ServerPacket::RoomList { rooms } => {
-                assert!(rooms.contains(&"general".to_owned()));
-                assert!(rooms.contains(&"zebra".to_owned()));
-                let mut sorted = rooms.clone();
-                sorted.sort();
-                assert_eq!(rooms, sorted, "rooms should be sorted");
-                Ok(())
-            }
-            other => panic!("expected RoomList, got {other:?}"),
-        }
+        let ServerPacket::RoomList { rooms } = h.recv(id).await.ok_or(())? else {
+            return Err(());
+        };
+        assert!(rooms.contains(&"general".to_owned()));
+        assert!(rooms.contains(&"zebra".to_owned()));
+        let mut sorted = rooms.clone();
+        sorted.sort();
+        assert_eq!(rooms, sorted, "rooms should be sorted");
+        Ok(())
     }
 
     // ── broadcast_to_room ─────────────────────────────────────────────────────
