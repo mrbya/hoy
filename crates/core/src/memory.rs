@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
-use crate::{
-    error::StoreError,
-    store::{RoomName, RoomRecord, ServerStore, StoredMessage},
-};
+use crate::error::StoreError;
+use crate::store::{RoomName, RoomRecord, ServerStore, StoredMessage};
 
 /**
  * In memory `ServerStore`
@@ -84,11 +82,9 @@ impl ServerStore for InMemoryStore {
 mod tests {
     use hoy_test::assert_matches;
 
-    use crate::{
-        error::StoreError,
-        memory::InMemoryStore,
-        store::{RoomName, ServerStore, StoredMessage},
-    };
+    use crate::error::StoreError;
+    use crate::memory::InMemoryStore;
+    use crate::store::{RoomName, ServerStore, StoredMessage};
 
     fn general() -> RoomName {
         RoomName::new("general").expect("hardcoded name is valid")

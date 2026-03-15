@@ -1,7 +1,5 @@
-use std::{
-    fmt::Display,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::fmt::Display;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Unique server-local identifier assigned to a connected client.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

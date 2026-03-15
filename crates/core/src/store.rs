@@ -53,8 +53,8 @@ impl RoomName {
             .find(|c| !(c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '-' || *c == '_'));
         if let Some(bad) = invalid {
             return Err(StoreError::InvalidRoomName(format!(
-                "room name contains invalid character {bad:?}; \
-                 only lowercase letters, digits, '-', and '_' are allowed"
+                "room name contains invalid character {bad:?}; only lowercase letters, digits, \
+                 '-', and '_' are allowed"
             )));
         }
 

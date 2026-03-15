@@ -10,7 +10,8 @@ use hoy_core::store::RoomName;
 use hoy_protocol::packet::ServerPacket;
 use tokio::sync::mpsc;
 
-use crate::{error::StateError, server::client_id::ClientId};
+use crate::error::StateError;
+use crate::server::client_id::ClientId;
 
 /// All live data te server holds about one connected, identified client.
 #[derive(Debug)]

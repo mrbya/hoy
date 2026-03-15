@@ -1,4 +1,5 @@
-use hoy_core::{error::StoreError, store::RoomName};
+use hoy_core::error::StoreError;
+use hoy_core::store::RoomName;
 use hoy_protocol::error::ProtocolError;
 use thiserror::Error;
 use tokio::task::JoinError;

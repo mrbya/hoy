@@ -10,10 +10,9 @@ use hoy_core::store::{RoomName, ServerStore, StoredMessage};
 use hoy_protocol::packet::ServerPacket;
 use tokio::sync::mpsc;
 
-use crate::{
-    error::StateError,
-    server::{client_id::ClientId, state::ServerState},
-};
+use crate::error::StateError;
+use crate::server::client_id::ClientId;
+use crate::server::state::ServerState;
 
 /// Clients that have connected but have not yet completed the `Hello` handshake.
 ///
