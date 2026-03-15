@@ -88,7 +88,7 @@ pub(crate) async fn handle_hello(
 
         Err(e) => {
             eprintln!("Error adding client: {e}");
-            send_error(&tx, "Internal server error during client handshake: {e}").await;
+            send_error(&tx, "Internal server error during client handshake").await;
         }
     }
 }

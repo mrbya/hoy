@@ -58,6 +58,7 @@ impl ServerState {
     }
 
     /// Returns the current member set of `room` or `None` if unknown.
+    #[must_use]
     pub fn room_members(&self, room: &RoomName) -> Option<&HashSet<ClientId>> {
         self.rooms.get(room).map(|r| &r.members)
     }
@@ -83,7 +84,7 @@ impl ServerState {
             .rooms
             .get_mut(&room)
             .ok_or_else(|| StateError::RoomNotFound(room.clone()))?;
-        room_state.members.insert(id.clone());
+        room_state.members.insert(id);
 
         self.clients.insert(
             id,
@@ -97,7 +98,7 @@ impl ServerState {
         Ok(())
     }
 
-    /// Removes a disconnected client and strips then from their current_room.
+    /// Removes a disconnected client and strips then from their `current_room`.
     ///
     /// Returns the removed [`ClientHandle`], or `None` if `id` was unknown.
     pub fn remove_client(&mut self, id: ClientId) -> Option<ClientHandle> {
@@ -131,7 +132,7 @@ impl ServerState {
         let handle = self
             .clients
             .get_mut(&id)
-            .ok_or(StateError::ClientNotFound(id.clone()))?;
+            .ok_or(StateError::ClientNotFound(id))?;
 
         let old_room = handle.current_room.clone();
         if old_room == new_room {
@@ -151,21 +152,25 @@ impl ServerState {
     }
 
     /// Returns the current room of `id`
+    #[must_use]
     pub fn current_room_of(&self, id: ClientId) -> Option<&RoomName> {
         self.clients.get(&id).map(|c| &c.current_room)
     }
 
     /// Returns the display name of `id`
+    #[must_use]
     pub fn username_of(&self, id: ClientId) -> Option<&str> {
         self.clients.get(&id).map(|c| c.username.as_str())
     }
 
     /// Returns the outbound packet channel for `id`
+    #[must_use]
     pub fn sender_of(&self, id: ClientId) -> Option<&mpsc::Sender<ServerPacket>> {
         self.clients.get(&id).map(|c| &c.tx)
     }
 
     /// Returns `true` if `username` is already in use.
+    #[must_use]
     pub fn is_username_taken(&self, username: &str) -> bool {
         self.clients.values().any(|c| c.username == username)
     }
