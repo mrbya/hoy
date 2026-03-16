@@ -186,6 +186,11 @@ pub trait ServerStore: Send + 'static {
         room: &RoomName,
         limit: usize,
     ) -> impl Future<Output = Result<Vec<StoredMessage>, StoreError>> + Send;
+
+    /**
+     * Returns storage type slug
+     */
+    fn storage_slug(&self) -> String;
 }
 
 #[cfg(test)]

@@ -89,7 +89,7 @@ A single persisted chat message:
 
 The persistence interface for durable server data — room definitions and message history. Live connection state (connected clients, active memberships, writer channels) is **not** managed here; that belongs to the network layer.
 
-All methods are async and return `impl Future + Send`, making the trait safe to use across tokio task boundaries.
+All methods, except `storage_slug`, are async and return `impl Future + Send`, making the trait safe to use across tokio task boundaries.
 
 ```rust
 pub trait ServerStore: Send + 'static {
@@ -101,6 +101,7 @@ pub trait ServerStore: Send + 'static {
         -> impl Future<Output = Result<(), StoreError>> + Send;
     fn load_recent_messages(&self, room: &RoomName, limit: usize)
         -> impl Future<Output = Result<Vec<StoredMessage>, StoreError>> + Send;
+    fn storage_slug(&self) -> String;
 }
 ```
 

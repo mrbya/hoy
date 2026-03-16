@@ -32,6 +32,9 @@ use crate::store::{RoomName, RoomRecord, ServerStore, StoredMessage};
 pub struct DbStore {
     /// Underlying connection pool.
     pool: SqlitePool,
+
+    /// Path to db storage file.
+    db_path: PathBuf,
 }
 
 impl DbStore {
@@ -70,7 +73,7 @@ impl DbStore {
             .await
             .map_err(|e| StoreError::Internal(e.to_string()))?;
 
-        Ok(Self { pool })
+        Ok(Self { pool, db_path })
     }
 
     /**
@@ -180,5 +183,9 @@ impl ServerStore for DbStore {
 
         messages.reverse();
         Ok(messages)
+    }
+
+    fn storage_slug(&self) -> String {
+        format!("SQLite DB @ {}", &self.db_path.display())
     }
 }

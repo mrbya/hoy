@@ -76,6 +76,10 @@ impl ServerStore for InMemoryStore {
         let start = history.len().saturating_sub(limit);
         Ok(history.get(start..).unwrap_or_default().to_vec())
     }
+
+    fn storage_slug(&self) -> String {
+        String::from("In memory storage. No data persistence.")
+    }
 }
 
 #[cfg(test)]

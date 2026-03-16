@@ -135,6 +135,27 @@ pub async fn run_server(
     }
     state.ensure_room(default_room.clone());
 
+    println!(
+        r"
+ █████   █████                     ███
+▒▒███   ▒▒███                     ▒███
+ ▒███    ▒███   ██████  █████ ████▒███     █████   ██████  ████████  █████ █████  ██████  ████████
+ ▒███████████  ███▒▒███▒▒███ ▒███ ▒███    ███▒▒   ███▒▒███▒▒███▒▒███▒▒███ ▒▒███  ███▒▒███▒▒███▒▒███
+ ▒███▒▒▒▒▒███ ▒███ ▒███ ▒███ ▒███ ▒███   ▒▒█████ ▒███████  ▒███ ▒▒▒  ▒███  ▒███ ▒███████  ▒███ ▒▒▒
+ ▒███    ▒███ ▒███ ▒███ ▒███ ▒███ ▒▒▒     ▒▒▒▒███▒███▒▒▒   ▒███      ▒▒███ ███  ▒███▒▒▒   ▒███
+ █████   █████▒▒██████  ▒▒███████  ███    ██████ ▒▒██████  █████      ▒▒█████   ▒▒██████  █████
+▒▒▒▒▒   ▒▒▒▒▒  ▒▒▒▒▒▒    ▒▒▒▒▒███ ▒▒▒    ▒▒▒▒▒▒   ▒▒▒▒▒▒  ▒▒▒▒▒        ▒▒▒▒▒     ▒▒▒▒▒▒  ▒▒▒▒▒
+                         ███ ▒███
+                        ▒▒██████
+                         ▒▒▒▒▒▒
+
+Version:    {}
+Address:    {bind_addr}
+Storage:    {}",
+        env!("CARGO_PKG_VERSION"),
+        store.storage_slug()
+    );
+
     while let Some(command) = server_rx.recv().await {
         handle_server_command(&mut state, &mut store, &mut pending, &default_room, command).await;
     }
@@ -307,6 +328,10 @@ mod tests {
                 return Err(StoreError::Internal("stub: load_messages failure".into()));
             }
             self.inner.load_recent_messages(room, limit).await
+        }
+
+        fn storage_slug(&self) -> String {
+            String::from("Storage stub")
         }
     }
 
