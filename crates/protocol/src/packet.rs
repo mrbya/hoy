@@ -72,6 +72,8 @@ pub enum ServerPacket {
     RoomJoined {
         /// Name of the room the client had joined.
         room: String,
+        /// Message history..
+        messages: Vec<MessageRecord>,
     },
 
     /// Response to `ListRooms`,
@@ -79,4 +81,13 @@ pub enum ServerPacket {
         /// List of available rooms.
         rooms: Vec<String>,
     },
+}
+
+/// Message record for [`ServerPacket::MessageHistory`]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MessageRecord {
+    /// Sender display name.
+    pub from: String,
+    /// Message text.
+    pub text: String,
 }

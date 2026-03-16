@@ -66,7 +66,7 @@ async fn handle_server_command(
         ServerCommand::Packet { client_id, packet } => {
             match packet {
                 ClientPacket::Hello { username } => {
-                    handle_hello(state, pending, client_id, username, default_room).await;
+                    handle_hello(state, store, pending, client_id, username, default_room).await;
                 }
                 ClientPacket::SendMessage { text } => {
                     handle_send_message(state, store, client_id, text).await;
@@ -256,6 +256,7 @@ mod tests {
             200,
             handle_hello(
                 &mut h.state,
+                &mut h.store,
                 &mut h.pending,
                 joiner,
                 "alice".into(),
@@ -263,6 +264,7 @@ mod tests {
             )
         );
 
+        //let _ = h.recv(joiner).await.ok_or(())?;
         let ServerPacket::Welcome { username, room } = h.recv(joiner).await.ok_or(())? else {
             return Err(());
         };
@@ -287,6 +289,7 @@ mod tests {
             200,
             handle_hello(
                 &mut h.state,
+                &mut h.store,
                 &mut h.pending,
                 id,
                 "bruce_lee".into(),
@@ -310,6 +313,7 @@ mod tests {
             200,
             handle_hello(
                 &mut h.state,
+                &mut h.store,
                 &mut h.pending,
                 newcomer,
                 "bruce_lee".into(),
@@ -457,7 +461,7 @@ mod tests {
             handle_join_room(&mut h.state, &mut h.store, joiner, "rust".into())
         );
 
-        let ServerPacket::RoomJoined { room } = h.recv(joiner).await.ok_or(())? else {
+        let ServerPacket::RoomJoined { room, .. } = h.recv(joiner).await.ok_or(())? else {
             return Err(());
         };
         assert_eq!(room, "rust");

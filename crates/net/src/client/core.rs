@@ -589,12 +589,12 @@ async fn handle_server_packet(
             emit_event(event_tx, ClientEvent::Pong).await
         }
 
-        ServerPacket::RoomJoined { room } => {
+        ServerPacket::RoomJoined { room, messages } => {
             if state.is_disconnected() {
                 return true;
             }
 
-            emit_event(event_tx, ClientEvent::RoomJoined { room }).await
+            emit_event(event_tx, ClientEvent::RoomJoined { room, messages }).await
         }
 
         ServerPacket::RoomList { rooms } => {

@@ -1,3 +1,4 @@
+use std::fmt::Write as _;
 use std::io::{self, BufRead};
 use std::net::SocketAddr;
 use std::thread;
@@ -236,7 +237,19 @@ fn format_client_event(event: &ClientEvent) -> String {
 
         ClientEvent::Error { ref message } => format!("Error: {message}"),
 
-        ClientEvent::RoomJoined { ref room } => format!("* joined #{room}"),
+        ClientEvent::RoomJoined {
+            ref room,
+            ref messages,
+        } => {
+            let mut lines = format!("* joined #{room}");
+            if !messages.is_empty() {
+                for message in messages {
+                    write!(lines, "\n[{room}] {}: {}", message.from, message.text)
+                        .expect("writing to a String is infallible");
+                }
+            }
+            lines
+        }
 
         ClientEvent::RoomList { ref rooms } => format!("* available rooms: {rooms:?}"),
 

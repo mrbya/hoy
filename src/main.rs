@@ -2,6 +2,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use clap::Parser;
 use hoy_core::memory::InMemoryStore;
+use hoy_core::store::{RoomName, ServerStore, StoredMessage};
 use hoy_net::client::test_client::run_test_client;
 use hoy_net::server::core::run_server;
 
@@ -59,7 +60,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         address = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST), args.port);
     }
 
-    let store = InMemoryStore::new();
+    let mut store = InMemoryStore::new();
+    let room1 = RoomName::new("test")?;
+    let room2 = RoomName::new(RoomName::GENERAL).expect("hardcoded name is valid");
+    let from = String::from("bob");
+    let messages: Vec<StoredMessage> = vec![
+        StoredMessage {
+            room: room1.clone(),
+            from: from.clone(),
+            text: String::from("akafuka1"),
+        },
+        StoredMessage {
+            room: room2.clone(),
+            from: from.clone(),
+            text: String::from("akafuka2"),
+        },
+        StoredMessage {
+            room: room1.clone(),
+            from: from.clone(),
+            text: String::from("akafuka3"),
+        },
+    ];
+
+    store.ensure_room(&room1)?;
+    store.ensure_room(&room2)?;
+    for message in messages {
+        store.append_message(message)?;
+    }
 
     if args.server {
         run_server(address, store).await?;

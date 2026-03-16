@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use hoy_core::store::{RoomName, ServerStore, StoredMessage};
-use hoy_protocol::packet::ServerPacket;
+use hoy_protocol::packet::{MessageRecord, ServerPacket};
 use tokio::sync::mpsc;
 
 use crate::error::StateError;
@@ -39,6 +39,7 @@ pub(crate) type PendingClients = HashMap<ClientId, mpsc::Sender<ServerPacket>>;
  */
 pub(crate) async fn handle_hello(
     state: &mut ServerState,
+    store: &mut impl ServerStore,
     pending: &mut PendingClients,
     client_id: ClientId,
     username: String,
@@ -80,6 +81,8 @@ pub(crate) async fn handle_hello(
                 Some(client_id),
             )
             .await;
+
+            handle_join_room(state, store, client_id, default_room.to_string()).await;
         }
 
         Err(StateError::UsernameTaken(_)) => {
@@ -202,10 +205,30 @@ pub(crate) async fn handle_join_room(
                 .await;
             }
 
+            let load_result = store.load_recent_messages(&target, 50);
+            let Ok(history) = load_result else {
+                eprintln!("Failed to load message history for {target}");
+                send_error(&tx, "Failed to load message history").await;
+                return;
+            };
+
+            let messages: Vec<MessageRecord> = if history.is_empty() {
+                Vec::new()
+            } else {
+                history
+                    .iter()
+                    .map(|m| MessageRecord {
+                        from: m.from.clone(),
+                        text: m.text.clone(),
+                    })
+                    .collect()
+            };
+
             send_packet(
                 &tx,
                 ServerPacket::RoomJoined {
                     room: target.to_string(),
+                    messages,
                 },
             )
             .await;

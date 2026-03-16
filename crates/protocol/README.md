@@ -166,8 +166,8 @@ TCP is a byte stream — a single `read()` call can return a partial frame, mult
 2. **`FrameBuffer`** — stateful wrapper. It accumulates raw bytes across multiple reads and removes exactly the bytes belonging to a complete frame when one is decoded. Bytes from subsequent frames are retained for the next `try_decode` call.
 
 ```
-read #1: [0, 0, 0, 10, '{']          → try_decode → None  (5 of 14 bytes)
-read #2: ['"', 'H', 'e', 'l', 'l']  → try_decode → None  (10 of 14 bytes)
-read #3: ['o', '"', '}', 0, 0, 0, 2] → try_decode → Some(Hello { .. })
-                                         buffer now holds [0, 0, 0, 2]
+read #1: [0, 0, 0, 10, '{']             → try_decode → None  (5 of 14 bytes)
+read #2: ['"', 'H', 'e', 'l', 'l']      → try_decode → None  (10 of 14 bytes)
+read #3: ['o', '"', '}', 0, 0, 0, 2]    → try_decode → Some(Hello { .. })
+                                          buffer now holds [0, 0, 0, 2]
 ```
