@@ -2,6 +2,53 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2026-03-16
+
+### Added
+
+#### `hoy-protocol` — Wire Protocol
+- `ClientPacket::JoinRoom { room: String }` — request to join or create a room.
+- `ClientPacket::ListRooms` — request a sorted list of all known rooms.
+- `ServerPacket::RoomJoined { room: String, messages: Vec<MessageRecord> }` — confirms a room change and delivers up to 50 recent messages, oldest first.
+- `ServerPacket::RoomList { rooms: Vec<String> }` — alphabetically sorted room list in response to `ListRooms`.
+- `MessageRecord { from: String, text: String }` — message entry embedded in `RoomJoined`.
+
+#### `hoy-core` — Domain Types
+- `store` module: `RoomName` (validated room name: lowercase ASCII, digits, `-`, `_`; 1–64 chars), `RoomRecord`, `StoredMessage`, and the `ServerStore` trait (`ensure_room`, `load_rooms`, `append_message`, `load_recent_messages`).
+- `memory` module: `InMemoryStore` — `HashMap`-backed in-memory `ServerStore` implementation used as the default runtime store.
+- `error` module: `StoreError` with `InvalidRoomName`, `RoomNotFound`, and `Internal` variants.
+
+#### `hoy-net` — Networking
+
+**Client**
+- `ClientCommand::JoinRoom { room }` and `ClientCommand::ListRooms` — new commands accepted by the client core.
+- `ClientEvent::RoomJoined { room, messages }` and `ClientEvent::RoomList { rooms }` — new events emitted to the frontend.
+- `ClientHandle::join_room(room)` and `ClientHandle::list_rooms()` — new methods on the public client handle.
+- Test client (`run_test_client`) handles `/room <name>` and `/list` input commands.
+
+**Server**
+- `server/state.rs`: `ServerState` — owns all live runtime state (identified clients, room membership); all mutations go through typed methods (`add_client`, `remove_client`, `move_client_to_room`, `ensure_room`, `room_names`, `room_members`, `username_of`, `sender_of`, `current_room_of`).
+- `server/handlers.rs`: `handle_hello`, `handle_send_message`, `handle_join_room`, `handle_list_rooms` extracted from the core loop, plus `send_packet`, `send_error`, and `broadcast_to_room` helpers.
+- Multiple rooms: clients can join arbitrary rooms (validated via `RoomName`); new rooms are persisted and hydrated into runtime state on join.
+- Message persistence: `handle_send_message` saves every message to the `ServerStore` (non-fatal on storage error).
+- Message history delivery: `handle_join_room` loads up to 50 recent messages from the store and includes them in `RoomJoined`; also sent after `Welcome` on initial connect.
+- `PendingClients` type alias for the pre-hello client map.
+- `StateError` enum: `UsernameTaken`, `RoomNotFound`, `ClientNotFound`, `StoreError`.
+- `NetError` expanded: `CommandChannelClosed`, `ClientChannelClosed`, `ClientTaskJoin(JoinError)`, `InternalServerError(StateError)`.
+
+#### Testing
+- Unit tests for `RoomName` validation: empty name, over-length, invalid characters (uppercase, space, `!`), valid name, `Display` formatting.
+- Unit tests for `ClientId`: `get()` returns non-zero `u64`, `Display` formats as `client#N`, sequential IDs differ by 1.
+- Server handler unit tests covering `handle_hello`, `handle_send_message`, `handle_join_room`, and `handle_list_rooms` including all error paths (username collision, duplicate hello, store failures, invalid room name, missing message history).
+- Server connection IO unit tests: command channel closed on connect and on packet receipt, read error propagation, writer error propagation.
+- Client session IO unit tests: reader task EOF, read failure, and corrupt frame; writer task write failure; `SessionHandle` clean shutdown.
+- Client core state machine unit tests: connect in wrong state, session spawn error, disconnect and connection-closed/error no-ops while disconnected, shutdown from connected state, welcome and packets in wrong state, `JoinRoom`/`ListRooms`/`SendMessage`/`Ping` while disconnected all emit errors.
+- `test_client` unit tests: empty input line, `/list` and `/room <name>` commands, invalid room name local error (no core event emitted), `RoomJoined` with messages formatting, `RoomList` formatting.
+- Integration test: `join_room_returns_message_history` — verifies that sent messages are delivered in `RoomJoined` when a second client joins the same room.
+
+#### Docs
+- Comprehensive READMEs written for `hoy-core`, `hoy-protocol`, and `hoy-net` covering all public types, traits, packet shapes, state machine diagrams, and protocol behaviour.
+
 ## [0.1.0] - 2026-03-11 - 1st release
 
 ### Added
