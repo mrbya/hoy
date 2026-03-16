@@ -32,6 +32,13 @@ test:
         echo "Packaging hoy..."
         just package
         rm -rf relases/package/tmp-crate
+        rm -rf release/package/tmp-registry
+        rm -rf \
+        release/package/hoy-net* \
+        release/package/hoy-protocol* \
+        release/package/hoy-core* \
+        release/package/hoy-test* \
+        release/package/hoy-tui*
       fi
 
 coverage:
