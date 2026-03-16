@@ -9,7 +9,6 @@ Shared domain logic and persistent storage abstractions for the hoy app.
 <!-- toc -->
 
 - [Lib modules](#lib-modules)
-- [Features](#features)
 - [`store` module](#store-module)
   * [`RoomName`](#roomname)
   * [`RoomRecord`](#roomrecord)
@@ -33,15 +32,7 @@ Shared domain logic and persistent storage abstractions for the hoy app.
 - `store`: `RoomName`, `RoomRecord`, `StoredMessage`, `ServerStore`
 - `memory`: `InMemoryStore` — in-memory `ServerStore` implementation (always available)
 - `dbstore`: `DbStore` — SQLite-backed `ServerStore` implementation
-- `cli` *(requires `dbstore` feature)*: `Hoy` — CLI argument parsing and application entry-point helpers
-
----
-
-## Features
-
-| Feature | Description |
-|---|---|
-| `dbstore` | Enables `DbStore` (SQLite-backed store) and the `cli` module. Pulls in `sqlx`. |
+- `cli`: `Hoy` — CLI argument parsing and application entry-point helpers
 
 ---
 
@@ -181,8 +172,6 @@ let messages = store.load_recent_messages(&general, 50).await?;
 ---
 
 ## `cli` module
-
-*Requires the `dbstore` feature.*
 
 Provides CLI argument parsing and application bootstrap helpers, so the binary entry point stays thin.
 

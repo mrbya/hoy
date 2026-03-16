@@ -8,14 +8,13 @@ All notable changes to this project will be documented in this file.
 
 #### `hoy-core` — Domain Types
 
-- `dbstore` feature flag: enables the SQLite-backed store and the `cli` module (pulls in `sqlx`).
 - `dbstore` module: `DbStore` — a `SqlitePool`-backed `ServerStore` that persists room definitions and message history across server restarts.
   - `DbStore::new(path)` — opens (or creates) the database at the given path, or resolves the platform data directory when `None` is passed (`~/.local/share/hoy/hoy.db` on Linux).
   - `DbStore::close()` — explicitly closes the underlying connection pool.
   - `DbStore::fetch_room_id(room)` — looks up the internal row ID for a room name.
   - `ServerStore` impl: `ensure_room` uses `INSERT OR IGNORE`; `load_recent_messages` fetches via `ORDER BY id DESC LIMIT ?` and reverses to return oldest-first.
   - Schema migrations (`migrations/`) applied automatically on construction: `0001_create_rooms.sql`, `0002_create_messages.sql`.
-- `cli` module *(requires `dbstore` feature)*: `Hoy` — CLI argument parsing and application bootstrap extracted from the binary.
+- `cli` module: `Hoy` — CLI argument parsing and application bootstrap extracted from the binary.
   - `Hoy::default()` — parses `std::env::args()` via `clap`.
   - `Hoy::resolve_address()` — resolves bind/connect address from `--address` / `--port`.
   - `Hoy::construct_store()` — opens the `DbStore` from `--db` or the platform default.
@@ -41,7 +40,7 @@ All notable changes to this project will be documented in this file.
 
 #### Testing
 
-- `DbStore` unit tests (behind `dbstore` feature + `tempfile` dev-dependency):
+- `DbStore` unit tests (behind `tempfile` dev-dependency):
   - `ensure_room_is_idempotent` — room created once despite two calls.
   - `append_requires_room_to_exist` — `RoomNotFound` error when room is absent.
   - `load_recent_respects_limit` — correct tail slice returned.

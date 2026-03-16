@@ -63,7 +63,6 @@
     clippy::verbose_file_reads
 )]
 
-#[cfg(feature = "dbstore")]
 /// Hoy command-line interface.
 pub mod cli;
 /// SQLite-backed `ServerStore` implementation.

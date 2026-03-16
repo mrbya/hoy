@@ -3,12 +3,19 @@ image: registry.gitlab.com/byacrates/hoy
 stages:
   - test
   - coverage
+  - upload
+  - release
+
+variables:
+  PACKAGE_VERSION: "${CI_COMMIT_TAG}"
+  PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/crates/${PACKAGE_VERSION}"
 
 workflow:
   rules:
     # only run on MRs and master branch
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == "master"
+    - if: $CI_COMMIT_TAG
 
 test:
   stage: test
@@ -39,3 +46,51 @@ coverage:
     - curl -L https://github.com/coverallsapp/coverage-reporter/releases/latest/download/coveralls-linux-x86_64.tar.gz | tar -xz
     - chmod +x ./coveralls
     - ./coveralls report coverage/lcov.info --repo-token "${COVERALLS_TOKEN}"
+
+.generate_package_name:
+  before_script:
+    - PACKAGE_PATH=$(find release/package -name "hoy*.crate" | tail -1)
+    - PACKAGE_NAME=$(basename "${PACKAGE_PATH}")
+
+upload:
+  stage: upload
+  image: curlimages/curl:latest
+  needs:
+    - job: coverage
+    - job: test
+  dependencies:
+    - test
+  extends: .generate_package_name
+  only:
+    - tags
+  artifacts:
+    paths:
+      - release/package/
+  script:
+    - echo "Uploading crate package to Gitlab Package Registry..."
+    - |
+      curl --fail-with-body --location \
+      --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+      --upload-file "${PACKAGE_PATH}" "${PACKAGE_REGISTRY_URL}/${PACKAGE_NAME}"
+
+release:
+  stage: release
+  image: curlimages/curl:latest
+  needs:
+    - job: upload
+    - job: test
+  dependencies:
+    - test
+  extends: .generate_package_name
+  only:
+    - tags
+  script:
+    - echo "Creating Gitlab release..."
+    - curl --location --output ./release-cli "https://gitlab.com/api/v4/projects/gitlab-org%2Frelease-cli/packages/generic/release-cli/latest/release-cli-linux-amd64"
+    - chmod +x ./release-cli
+    - |
+      ./release-cli create \
+      --name "Release ${CI_COMMIT_TAG}" \
+      --tag-name "${CI_COMMIT_TAG}" \
+      --description "hoy release ${CI_COMMIT_TAG}" \
+      --assets-link "{\"name\":\"${PACKAGE_NAME}\", \"url\":\"${PACKAGE_REGISTRY_URL}/${PACKAGE_NAME}\", \"link_type\":\"package\"}"
