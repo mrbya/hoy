@@ -1,0 +1,11 @@
+[advisories]
+ignore = [
+    # Non-utf8 String can be created with `TimeBuf::as_str`
+    "RUSTSEC-2025-0140",
+    # Marvin attack can be ignored as there's no auth in hoy yet
+    "RUSTSEC-2023-0071"
+]
+
+[output]
+quiet = false
+deny = ["warnings"]

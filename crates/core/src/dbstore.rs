@@ -1,4 +1,4 @@
-//! SQLite-backed [`ServerStore`] implementation.
+//! SQLite-backed [`ServerStore`](crate::store::ServerStore) implementation.
 
 use std::path::PathBuf;
 
@@ -18,7 +18,7 @@ use crate::store::{RoomName, RoomRecord, ServerStore, StoredMessage};
  *
  * ```no_run
  * use hoy_core::dbstore::DbStore;
- * use hoy_core::store::RoomName;
+ * use hoy_core::store::{RoomName, ServerStore};
  *
  * # async fn foo() -> Result<(), Box<dyn std::error::Error>> {
  *     let store = DbStore::new(None).await?;

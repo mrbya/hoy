@@ -40,7 +40,7 @@ struct Cli {
     #[arg(short = 'u', long = "username")]
     username: Option<String>,
 
-    /// Path to storage db file
+    /// Path to storage db file [default: ~/.local/share/hoy/hoy.db]
     #[arg(short = 'd', long = "db", value_name = "FILE")]
     db: Option<PathBuf>,
 }

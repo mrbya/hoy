@@ -45,6 +45,7 @@ Options:
   -p, --port <PORT>          Port to bind the server or connect the client to [default: 7777]
   -a, --address <IPV4>       Server address to connect to. [default: localhost]
   -u, --username <USERNAME>  Client username (required in client mode)
+  -d, --db <FILE>            Path to storage db file [default: ~/.local/share/hoy/hoy.db]
   -h, --help                 Print help
   -V, --version              Print version
 ```

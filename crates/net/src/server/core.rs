@@ -1,7 +1,7 @@
 //! Central server event loop.
 //!
-//! [`run_server`](core::run_server) binds the listener and owns both the live
-//! [`ServerState`](state::ServerState) and the
+//! [`run_server`](crate::server::core::run_server) binds the listener and owns both the live
+//! [`ServerState`](crate::server::state::ServerState) and the
 //! [`ServerStore`](hoy_core::store::ServerStore). All packet-level logic is
 //! delegated to [`handlers`].
 
