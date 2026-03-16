@@ -202,8 +202,6 @@ impl ServerStore for DbStore {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
     use hoy_test::assert_matches;
     use tempfile::TempDir;
 
@@ -217,10 +215,6 @@ mod tests {
             .await
             .expect("Db opening failed unexpectedly");
         (store, dir)
-    }
-
-    fn teardown(dir: &TempDir) {
-        let _res = fs::remove_dir_all(dir.path());
     }
 
     fn general() -> RoomName {
@@ -245,7 +239,7 @@ mod tests {
 
     #[tokio::test]
     async fn ensure_room_is_idempotent() {
-        let (mut store, dir) = setup().await;
+        let (mut store, _dir) = setup().await;
         store
             .ensure_room(&general())
             .await
@@ -273,13 +267,11 @@ mod tests {
                 .len(),
             1
         );
-
-        teardown(&dir);
     }
 
     #[tokio::test]
     async fn append_requires_room_to_exist() {
-        let (mut store, dir) = setup().await;
+        let (mut store, _dir) = setup().await;
         let room = RoomName::new("nonexistent").expect("Hardcoded room name is valid");
         let res = store
             .append_message(StoredMessage {
@@ -289,21 +281,19 @@ mod tests {
             })
             .await;
         assert_matches!(res, Err(StoreError::RoomNotFound(_)));
-        teardown(&dir);
     }
 
     #[tokio::test]
     async fn load_requires_room_to_exist() {
-        let (store, dir) = setup().await;
+        let (store, _dir) = setup().await;
         let room = room_name("nonexistent");
         let res = store.load_recent_messages(&room, 5).await;
         assert_matches!(res, Err(StoreError::RoomNotFound(_)));
-        teardown(&dir);
     }
 
     #[tokio::test]
     async fn load_recent_respects_limit() {
-        let (mut store, dir) = setup().await;
+        let (mut store, _dir) = setup().await;
         let room = general();
 
         store
@@ -332,12 +322,11 @@ mod tests {
             recent.last().expect("Failed to retrieve message 3").text,
             "msg 9"
         );
-        teardown(&dir);
     }
 
     #[tokio::test]
     async fn load_rooms_sorted() {
-        let (mut store, dir) = setup().await;
+        let (mut store, _dir) = setup().await;
         store
             .ensure_room(&room_name("zebra"))
             .await
@@ -357,7 +346,6 @@ mod tests {
             .expect("Load rooms failed unexpectedly");
         let names: Vec<&str> = rooms.iter().map(|r| r.name.as_str()).collect();
         assert_eq!(names, ["alpha", "general", "zebra"]);
-        teardown(&dir);
     }
 
     #[tokio::test]
@@ -411,7 +399,5 @@ mod tests {
                 .text,
             "msg 0"
         );
-
-        teardown(&dir);
     }
 }
