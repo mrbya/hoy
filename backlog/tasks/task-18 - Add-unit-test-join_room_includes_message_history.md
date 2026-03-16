@@ -1,8 +1,9 @@
 ---
 id: TASK-18
 title: Add unit test join_room_includes_message_history
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-03-16'
 updated_date: '2026-03-16'
 labels:
@@ -25,11 +26,11 @@ priority: medium
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 New test `join_room_includes_message_history` exists in the server unit tests
-- [ ] #2 Test persists at least one message via `handle_send_message` before the join
-- [ ] #3 Test calls `handle_join_room` and asserts the resulting `RoomJoined.messages` contains the expected `MessageRecord` entries (correct `from` and `text` fields)
-- [ ] #4 Test follows existing test harness patterns (uses `ServerHarness` or equivalent helpers)
-- [ ] #5 `just test` passes with no failures
+- [x] #1 New test `join_room_includes_message_history` exists in the server unit tests
+- [x] #2 Test persists at least one message via `handle_send_message` before the join
+- [x] #3 Test calls `handle_join_room` and asserts the resulting `RoomJoined.messages` contains the expected `MessageRecord` entries (correct `from` and `text` fields)
+- [x] #4 Test follows existing test harness patterns (uses `ServerHarness` or equivalent helpers)
+- [x] #5 `just test` passes with no failures
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -44,3 +45,18 @@ priority: medium
 7. Run `cargo nextest run --all-features --workspace join_room_includes_message_history` to verify
 8. Run `just test` to ensure no regressions
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added `join_room_includes_message_history` to the server unit tests in `crates/net/src/server/core.rs`.
+Also added `MessageRecord` to the test module's imports.
+
+Test setup:
+- alice and bob both identified in `#general`
+- alice sends `"hello world"` via `handle_send_message`; both ChatMessage packets are drained
+- bob re-joins `#general` via `handle_join_room` (same room, so no leave broadcast)
+- asserts `RoomJoined.room == "general"` and `messages == [MessageRecord { from: "alice", text: "hello world" }]`
+
+All 59 tests pass.
+<!-- SECTION:FINAL_SUMMARY:END -->

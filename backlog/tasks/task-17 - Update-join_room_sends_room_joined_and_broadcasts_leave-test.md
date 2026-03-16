@@ -1,8 +1,9 @@
 ---
 id: TASK-17
 title: Update join_room_sends_room_joined_and_broadcasts_leave to assert messages field
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-03-16'
 updated_date: '2026-03-16'
 labels:
@@ -21,10 +22,10 @@ In this test no messages are persisted before the room join, so `messages` shoul
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Replace `..` wildcard in the `RoomJoined` destructure with an explicit `messages` binding
-- [ ] #2 Assert that `messages` is empty (`assert!(messages.is_empty())` or `assert_eq!(messages, vec![])`)
-- [ ] #3 Test still passes after the change
-- [ ] #4 `just test` passes with no failures
+- [x] #1 Replace `..` wildcard in the `RoomJoined` destructure with an explicit `messages` binding
+- [x] #2 Assert that `messages` is empty (`assert!(messages.is_empty())` or `assert_eq!(messages, vec![])`)
+- [x] #3 Test still passes after the change
+- [x] #4 `just test` passes with no failures
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -36,3 +37,11 @@ In this test no messages are persisted before the room join, so `messages` shoul
 4. Run `cargo nextest run --all-features --workspace join_room_sends_room_joined_and_broadcasts_leave` to confirm
 5. Run `just test` to ensure no regressions
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Replaced `..` with an explicit `messages` binding in the `RoomJoined` destructure inside
+`join_room_sends_room_joined_and_broadcasts_leave` (`crates/net/src/server/core.rs`) and added
+`assert!(messages.is_empty(), ...)`. All 58 tests pass.
+<!-- SECTION:FINAL_SUMMARY:END -->

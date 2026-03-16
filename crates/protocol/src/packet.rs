@@ -83,7 +83,7 @@ pub enum ServerPacket {
     },
 }
 
-/// Message record for [`ServerPacket::MessageHistory`]
+/// Message record for serialized packets.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MessageRecord {
     /// Sender display name.

@@ -1,8 +1,9 @@
 ---
 id: TASK-16
 title: Fix hello_sends_welcome_and_broadcasts_join test
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-03-16'
 updated_date: '2026-03-16'
 labels:
@@ -23,10 +24,10 @@ The test currently calls `h.assert_no_packet(joiner)` and `h.assert_no_packet(ob
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Test passes: consume the `RoomJoined` packet that the joiner now receives after `Welcome`
-- [ ] #2 Test passes: consume the second `SystemMessage` (`"<user> joined #<room>"`) that the observer now receives from the internal `handle_join_room` call
-- [ ] #3 Assert the content of the `RoomJoined` packet (room name correct, `messages` is empty since no history exists)
-- [ ] #4 `just test` passes with no failures
+- [x] #1 Test passes: consume the `RoomJoined` packet that the joiner now receives after `Welcome`
+- [x] #2 Test passes: consume the second `SystemMessage` (`"<user> joined #<room>"`) that the observer now receives from the internal `handle_join_room` call
+- [x] #3 Assert the content of the `RoomJoined` packet (room name correct, `messages` is empty since no history exists)
+- [x] #4 `just test` passes with no failures
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -39,3 +40,18 @@ The test currently calls `h.assert_no_packet(joiner)` and `h.assert_no_packet(ob
 5. Run `cargo nextest run --all-features --workspace hello_sends_welcome_and_broadcasts_join` to confirm the fix
 6. Run `just test` to ensure no regressions
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Updated `hello_sends_welcome_and_broadcasts_join` in `crates/net/src/server/core.rs`.
+
+After `Welcome`, the test now also consumes the `RoomJoined` packet the joiner receives from the
+internal `handle_join_room` call, asserting `room == "general"` and `messages.is_empty()`.
+
+After the first `SystemMessage` on the observer, the test consumes the second `SystemMessage` (from
+`handle_join_room`'s broadcast), asserting it also mentions "alice".
+
+`assert_no_packet` calls are now placed after all expected packets have been consumed, confirming
+no spurious packets remain. All 58 tests pass.
+<!-- SECTION:FINAL_SUMMARY:END -->

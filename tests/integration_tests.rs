@@ -264,6 +264,57 @@ async fn message_broadcast_reaches_all_clients() -> Result<(), ()> {
 }
 
 #[tokio::test]
+async fn join_room_returns_message_history() -> Result<(), ()> {
+    let Some((addr, server_task)) = spawn_server().await else {
+        return Ok(());
+    };
+
+    // ── Alice: connect, handshake, send a message ─────────────────────────
+    let mut alice = TestClient::connect(addr).await?;
+    alice.hello("alice").await?;
+    // handle_hello chains into handle_join_room, so alice receives RoomJoined
+    // after Welcome. Drain it before sending messages.
+    alice
+        .recv_until(IO_TIMEOUT_MS, |p| {
+            matches!(p, ServerPacket::RoomJoined { .. })
+        })
+        .await?;
+
+    alice
+        .send(&ClientPacket::SendMessage {
+            text: String::from("hi from alice"),
+        })
+        .await?;
+    // Drain the ChatMessage echo back to alice.
+    alice
+        .recv_until(IO_TIMEOUT_MS, |p| {
+            matches!(p, ServerPacket::ChatMessage { .. })
+        })
+        .await?;
+
+    // ── Bob: connect, handshake, assert RoomJoined carries alice's message ─
+    let mut bob = TestClient::connect(addr).await?;
+    bob.hello("bob").await?;
+
+    let room_joined = bob
+        .recv_until(BROADCAST_TIMEOUT_MS, |p| {
+            matches!(p, ServerPacket::RoomJoined { .. })
+        })
+        .await?;
+
+    let ServerPacket::RoomJoined { room, messages } = room_joined else {
+        return Err(());
+    };
+    assert_eq!(room, "general");
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].from, "alice");
+    assert_eq!(messages[0].text, "hi from alice");
+
+    server_task.abort();
+    Ok(())
+}
+
+#[tokio::test]
 async fn ping_receives_pong() -> Result<(), ()> {
     let Some((addr, server_task)) = spawn_server().await else {
         return Ok(());

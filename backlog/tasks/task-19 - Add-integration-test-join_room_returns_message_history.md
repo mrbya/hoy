@@ -1,8 +1,9 @@
 ---
 id: TASK-19
 title: Add integration test join_room_returns_message_history
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@claude'
 created_date: '2026-03-16'
 updated_date: '2026-03-16'
 labels:
@@ -28,13 +29,13 @@ This complements the unit test (TASK-18) by exercising the TCP stack and JSON se
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 New integration test `join_room_returns_message_history` exists in `tests/integration_tests.rs`
-- [ ] #2 Test spins up a real server (using the existing `spawn_server` or equivalent helper)
-- [ ] #3 Alice connects, sends `Hello`, receives `Welcome` + `RoomJoined`, then sends one or more `SendMessage` packets
-- [ ] #4 Bob connects, sends `Hello`, and receives `Welcome` followed by a `RoomJoined` whose `messages` field contains Alice's messages
-- [ ] #5 Test asserts message count and content (`from` == alice's username, `text` matches what was sent)
-- [ ] #6 Test is deterministic (no timing sleeps; uses the existing timeout helpers)
-- [ ] #7 `just test` passes with no failures
+- [x] #1 New integration test `join_room_returns_message_history` exists in `tests/integration_tests.rs`
+- [x] #2 Test spins up a real server (using the existing `spawn_server` or equivalent helper)
+- [x] #3 Alice connects, sends `Hello`, receives `Welcome` + `RoomJoined`, then sends one or more `SendMessage` packets
+- [x] #4 Bob connects, sends `Hello`, and receives `Welcome` followed by a `RoomJoined` whose `messages` field contains Alice's messages
+- [x] #5 Test asserts message count and content (`from` == alice's username, `text` matches what was sent)
+- [x] #6 Test is deterministic (no timing sleeps; uses the existing timeout helpers)
+- [x] #7 `just test` passes with no failures
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -49,3 +50,19 @@ This complements the unit test (TASK-18) by exercising the TCP stack and JSON se
 7. Run `cargo nextest run --all-features --workspace join_room_returns_message_history` to verify
 8. Run `just test` to ensure no regressions
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added `join_room_returns_message_history` to `tests/integration_tests.rs`.
+
+Flow:
+- Alice connects → `hello("alice")` returns Welcome → drain buffered `RoomJoined`
+  (sent by the internal `handle_join_room` call in `handle_hello`)
+- Alice sends `"hi from alice"` → drain her `ChatMessage` echo
+- Bob connects → `hello("bob")` returns Welcome → `recv_until(RoomJoined)`
+- Assert `room == "general"`, `messages.len() == 1`,
+  `messages[0].from == "alice"`, `messages[0].text == "hi from alice"`
+
+No sleeps; uses the existing `recv_until` / timeout helpers. All 60 tests pass.
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -153,7 +153,7 @@ mod tests {
 
     use hoy_core::memory::InMemoryStore;
     use hoy_core::store::{RoomName, ServerStore};
-    use hoy_protocol::packet::{ClientPacket, ServerPacket};
+    use hoy_protocol::packet::{ClientPacket, MessageRecord, ServerPacket};
     use hoy_test::async_ok;
     use tokio::sync::mpsc;
 
@@ -271,12 +271,42 @@ mod tests {
         assert_eq!(username, "alice");
         assert_eq!(room, DEFAULT_ROOM);
 
+        // handle_hello broadcasts the join, then calls handle_join_room internally.
+        // The observer therefore receives two SystemMessages: one from each.
         let ServerPacket::SystemMessage { text } = h.recv(observer).await.ok_or(())? else {
             return Err(());
         };
         assert!(text.contains("alice"), "join message should mention alice");
+
+        // handle_join_room sends RoomJoined to the joiner (no prior history).
+        let ServerPacket::RoomJoined {
+            room: joined_room,
+            messages,
+        } = h.recv(joiner).await.ok_or(())?
+        else {
+            return Err(());
+        };
+        assert_eq!(joined_room, DEFAULT_ROOM);
+        assert!(
+            messages.is_empty(),
+            "no message history expected on first join"
+        );
+
+        // Second join broadcast from handle_join_room reaches the observer.
+        let ServerPacket::SystemMessage {
+            text: second_join_text,
+        } = h.recv(observer).await.ok_or(())?
+        else {
+            return Err(());
+        };
+        assert!(
+            second_join_text.contains("alice"),
+            "second join message should mention alice"
+        );
+
         // The joiner must not receive the join broadcast about themselves.
         h.assert_no_packet(joiner);
+        h.assert_no_packet(observer);
         Ok(())
     }
 
@@ -461,10 +491,14 @@ mod tests {
             handle_join_room(&mut h.state, &mut h.store, joiner, "rust".into())
         );
 
-        let ServerPacket::RoomJoined { room, .. } = h.recv(joiner).await.ok_or(())? else {
+        let ServerPacket::RoomJoined { room, messages } = h.recv(joiner).await.ok_or(())? else {
             return Err(());
         };
         assert_eq!(room, "rust");
+        assert!(
+            messages.is_empty(),
+            "no message history expected for a new room"
+        );
 
         let ServerPacket::SystemMessage { text } = h.recv(observer).await.ok_or(())? else {
             return Err(());
@@ -486,6 +520,42 @@ mod tests {
         let ServerPacket::Error { .. } = h.recv(id).await.ok_or(())? else {
             return Err(());
         };
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn join_room_includes_message_history() -> Result<(), ()> {
+        let mut h = TestHarness::new();
+        let alice = h.add_identified_client("alice");
+        let bob = h.add_identified_client("bob");
+
+        // Alice sends a message; both alice and bob receive the ChatMessage broadcast.
+        async_ok!(
+            200,
+            handle_send_message(&h.state, &mut h.store, alice, "hello world".into())
+        );
+        let _ = h.recv(alice).await; // drain alice's own ChatMessage
+        let _ = h.recv(bob).await; // drain bob's ChatMessage
+
+        // Bob re-joins #general. Because old_room == target the leave broadcast is
+        // suppressed, but RoomJoined is still sent with the stored history.
+        async_ok!(
+            200,
+            handle_join_room(&mut h.state, &mut h.store, bob, DEFAULT_ROOM.into())
+        );
+
+        let ServerPacket::RoomJoined { room, messages } = h.recv(bob).await.ok_or(())? else {
+            return Err(());
+        };
+        assert_eq!(room, DEFAULT_ROOM);
+        assert_eq!(
+            messages,
+            vec![MessageRecord {
+                from: "alice".to_owned(),
+                text: "hello world".to_owned(),
+            }]
+        );
+
         Ok(())
     }
 
