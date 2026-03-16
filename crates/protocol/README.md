@@ -4,6 +4,28 @@
 
 Wire-level protocol defining packets and codec of the hoy app.
 
+## Index
+
+<!-- toc -->
+
+- [Lib modules](#lib-modules)
+- [Frame format](#frame-format)
+- [Packets](#packets)
+  * [`ClientPacket` — client → server](#clientpacket--client-%E2%86%92-server)
+  * [`ServerPacket` — server → client](#serverpacket--server-%E2%86%92-client)
+  * [`MessageRecord`](#messagerecord)
+  * [JSON wire shapes](#json-wire-shapes)
+- [Codec](#codec)
+  * [`encode_frame(value) -> Result, ProtocolError>`](#encode_framevalue---result-protocolerror)
+  * [`decode_frame(frame) -> Result`](#decode_frameframe---result)
+  * [`try_decode_frame(buffer) -> Result, ProtocolError>`](#try_decode_framebuffer---result-protocolerror)
+- [FrameBuffer](#framebuffer)
+  * [Methods](#methods)
+- [Error types](#error-types)
+- [Streaming behaviour](#streaming-behaviour)
+
+<!-- tocstop -->
+
 ## Lib modules
 
 - `codec`: `encode_frame`, `decode_frame`, `try_decode_frame`

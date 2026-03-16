@@ -4,6 +4,25 @@
 
 Hoy chat app networking logic.
 
+## Index
+
+<!-- toc -->
+
+- [Lib modules](#lib-modules)
+- [Client design](#client-design)
+  * [Client state machine](#client-state-machine)
+  * [Client commands (`ClientCommand`)](#client-commands-clientcommand)
+  * [Client events (`ClientEvent`)](#client-events-clientevent)
+- [Server design](#server-design)
+  * [Server state](#server-state)
+- [Protocol behaviour](#protocol-behaviour)
+  * [Handshake](#handshake)
+  * [Messaging](#messaging)
+  * [Rooms](#rooms)
+  * [Disconnect](#disconnect)
+
+<!-- tocstop -->
+
 ## Lib modules
 
 - `error`: `NetError` and `StateError` types

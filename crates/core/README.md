@@ -4,6 +4,23 @@
 
 Shared domain logic and persistent storage abstractions for the hoy app.
 
+## Index
+
+<!-- toc -->
+
+- [Lib modules](#lib-modules)
+- [`store` module](#store-module)
+  * [`RoomName`](#roomname)
+  * [`RoomRecord`](#roomrecord)
+  * [`StoredMessage`](#storedmessage)
+  * [`ServerStore` trait](#serverstore-trait)
+- [`memory` module](#memory-module)
+  * [`InMemoryStore`](#inmemorystore)
+- [`error` module](#error-module)
+  * [`StoreError`](#storeerror)
+
+<!-- tocstop -->
+
 ## Lib modules
 
 - `error`: `StoreError`
