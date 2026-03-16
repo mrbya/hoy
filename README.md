@@ -19,8 +19,7 @@ A TUI real time messaging app inspired by accord.
 - [Crates](#crates)
 - [Protocol](#protocol)
   * [Frame format](#frame-format)
-  * [Client packets](#client-packets)
-  * [Server packets](#server-packets)
+  * [Client packets and server packets](#client-packets-and-server-packets)
 - [Similar projects](#similar-projects)
 - [License](#license)
 - [Contribution](#contribution)
@@ -85,6 +84,8 @@ commands begin with `/`:
 
 | Command       | Action                                      |
 |---------------|---------------------------------------------|
+| `/list`       | Requests a list of available rooms          |
+| `/room <room name>` | Requests joining/creating a room      |
 | `/ping`       | Send a heartbeat ping; server replies Pong. |
 | `/disconnect` | Disconnect from the server without exiting. |
 | `/quit`       | Disconnect and exit the client.             |
@@ -92,6 +93,10 @@ commands begin with `/`:
 
 Any other input is sent as a chat message and broadcast to all clients in the
 room.
+
+Valid room name:
+- Allowed characters: lowercase ASCII letters, Ascii digits, `_`, `-`
+- Length: 1-64 characters.
 
 ## Crates
 
@@ -117,27 +122,9 @@ The JSON payload is a serialized `ClientPacket` or `ServerPacket` enum value.
 There is no framing delimiter; frames are concatenated directly in the TCP
 stream.
 
-### Client packets
+### Client packets and server packets
 
-Packets sent from client to server:
-
-| Variant       | Fields                   | When sent                          |
-|---------------|--------------------------|------------------------------------|
-| `Hello`       | `username: String`       | Immediately after TCP connect.     |
-| `SendMessage` | `text: String`           | User sends a chat message.         |
-| `Ping`        | —                        | User runs `/ping`.                 |
-
-### Server packets
-
-Packets sent from server to client:
-
-| Variant         | Fields                               | When sent                                      |
-|-----------------|--------------------------------------|------------------------------------------------|
-| `Welcome`       | `username: String`, `room: String`   | Handshake accepted; confirms username and room.|
-| `ChatMessage`   | `from: String`, `room: String`, `text: String` | A client sent a message; broadcast to all.  |
-| `SystemMessage` | `text: String`                       | Join/leave notifications.                      |
-| `Error`         | `message: String`                    | Protocol or state error (e.g. duplicate name). |
-| `Pong`          | —                                    | Response to a `Ping`.                          |
+See [hoy-protocol readme](crates/protocol/README.md).
 
 ## Similar projects
 - [accord](https://github.com/LoipesMas/accord)

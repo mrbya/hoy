@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 
+use hoy_core::memory::InMemoryStore;
 use hoy_net::server::core::run_server;
 use hoy_protocol::codec::encode_frame;
 use hoy_protocol::frame_buffer::FrameBuffer;
@@ -118,8 +119,10 @@ async fn spawn_server() -> Option<(SocketAddr, JoinHandle<()>)> {
     };
     drop(listener);
 
+    let store = InMemoryStore::new();
+
     let join = tokio::spawn(async move {
-        let _ = run_server(addr).await;
+        let _ = run_server(addr, store).await;
     });
 
     Some((addr, join))
@@ -167,11 +170,11 @@ async fn client_can_connect_and_receive_welcome() -> Result<(), ()> {
     };
     let mut client = TestClient::connect(addr).await?;
 
-    let packet = client.hello("viktor").await?;
+    let packet = client.hello("bruce_lee").await?;
     match packet {
         ServerPacket::Welcome { username, room } => {
-            assert_eq!(username, "viktor");
-            assert_eq!(room, "#general");
+            assert_eq!(username, "bruce_lee");
+            assert_eq!(room, "general");
         }
         _ => return Err(()),
     }
@@ -194,7 +197,7 @@ async fn message_broadcast_reaches_all_clients() -> Result<(), ()> {
         first_welcome,
         ServerPacket::Welcome {
             username: String::from("alice"),
-            room: String::from("#general"),
+            room: String::from("general"),
         }
     );
 
@@ -203,7 +206,7 @@ async fn message_broadcast_reaches_all_clients() -> Result<(), ()> {
         second_welcome,
         ServerPacket::Welcome {
             username: String::from("bob"),
-            room: String::from("#general"),
+            room: String::from("general"),
         }
     );
 
@@ -243,7 +246,7 @@ async fn message_broadcast_reaches_all_clients() -> Result<(), ()> {
         first_msg,
         ServerPacket::ChatMessage {
             from: String::from("alice"),
-            room: String::from("#general"),
+            room: String::from("general"),
             text: String::from("hello all"),
         }
     );
@@ -251,10 +254,61 @@ async fn message_broadcast_reaches_all_clients() -> Result<(), ()> {
         second_msg,
         ServerPacket::ChatMessage {
             from: String::from("alice"),
-            room: String::from("#general"),
+            room: String::from("general"),
             text: String::from("hello all"),
         }
     );
+
+    server_task.abort();
+    Ok(())
+}
+
+#[tokio::test]
+async fn join_room_returns_message_history() -> Result<(), ()> {
+    let Some((addr, server_task)) = spawn_server().await else {
+        return Ok(());
+    };
+
+    // ── Alice: connect, handshake, send a message ─────────────────────────
+    let mut alice = TestClient::connect(addr).await?;
+    alice.hello("alice").await?;
+    // handle_hello chains into handle_join_room, so alice receives RoomJoined
+    // after Welcome. Drain it before sending messages.
+    alice
+        .recv_until(IO_TIMEOUT_MS, |p| {
+            matches!(p, ServerPacket::RoomJoined { .. })
+        })
+        .await?;
+
+    alice
+        .send(&ClientPacket::SendMessage {
+            text: String::from("hi from alice"),
+        })
+        .await?;
+    // Drain the ChatMessage echo back to alice.
+    alice
+        .recv_until(IO_TIMEOUT_MS, |p| {
+            matches!(p, ServerPacket::ChatMessage { .. })
+        })
+        .await?;
+
+    // ── Bob: connect, handshake, assert RoomJoined carries alice's message ─
+    let mut bob = TestClient::connect(addr).await?;
+    bob.hello("bob").await?;
+
+    let room_joined = bob
+        .recv_until(BROADCAST_TIMEOUT_MS, |p| {
+            matches!(p, ServerPacket::RoomJoined { .. })
+        })
+        .await?;
+
+    let ServerPacket::RoomJoined { room, messages } = room_joined else {
+        return Err(());
+    };
+    assert_eq!(room, "general");
+    assert_eq!(messages.len(), 1);
+    assert_eq!(messages[0].from, "alice");
+    assert_eq!(messages[0].text, "hi from alice");
 
     server_task.abort();
     Ok(())
@@ -267,12 +321,12 @@ async fn ping_receives_pong() -> Result<(), ()> {
     };
     let mut client = TestClient::connect(addr).await?;
 
-    let welcome = client.hello("viktor").await?;
+    let welcome = client.hello("bruce_lee").await?;
     assert_eq!(
         welcome,
         ServerPacket::Welcome {
-            username: String::from("viktor"),
-            room: String::from("#general"),
+            username: String::from("bruce_lee"),
+            room: String::from("general"),
         }
     );
 

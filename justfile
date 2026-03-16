@@ -33,6 +33,9 @@ build *FLAGS:
 doc *FLAGS:
     cargo doc --no-deps --all-features --document-private-items --workspace {{FLAGS}}
 
+doctest:
+    cargo test --workspace --doc
+
 # Calculate coverage and open page with the results.
 coverage *FLAGS:
     cargo llvm-cov nextest --all-features --workspace {{FLAGS}}
@@ -77,6 +80,9 @@ package *FLAGS:
 # Indexes README:
 index:
     markdown-toc -i ./README.md
+    markdown-toc -i ./crates/core/README.md
+    markdown-toc -i ./crates/net/README.md
+    markdown-toc -i ./crates/protocol/README.md
 
 # Runs all checks necessary before commit.
 # Checks formating, code quality, tests, documentation, spellcheck and more.
@@ -85,6 +91,7 @@ pre-commit:
     @just check -- -D warnings
     @just test
     @just doc
+    @just doctest
     @just thorough-check
     @just index
 
@@ -98,6 +105,7 @@ ci:
     @just coverage
     @just coverage-ci
     @just doc
+    @just doctest
     @just thorough-check
 
 # Initializes the project, installing all tools necessary. Should be run once before begining of development.

@@ -345,14 +345,53 @@ async fn emit_internal_event(internal_tx: &mpsc::Sender<InternalEvent>, event: I
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+
     use hoy_protocol::codec::encode_frame;
     use hoy_protocol::frame_buffer::FrameBuffer;
     use hoy_protocol::packet::{ClientPacket, ServerPacket};
     use hoy_test::async_ok;
-    use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt, DuplexStream};
+    use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, DuplexStream, ReadBuf};
     use tokio::sync::mpsc;
 
-    use super::{InternalEvent, spawn_reader_task_io, spawn_writer_task_io};
+    use super::{InternalEvent, SessionHandle, spawn_reader_task_io, spawn_writer_task_io};
+    use crate::error::NetError;
+
+    // ── Stubs ─────────────────────────────────────────────────────────────────
+
+    struct FailReader;
+
+    impl AsyncRead for FailReader {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _buf: &mut ReadBuf<'_>,
+        ) -> Poll<io::Result<()>> {
+            Poll::Ready(Err(io::Error::other("stub read fail")))
+        }
+    }
+
+    struct FailWriter;
+
+    impl AsyncWrite for FailWriter {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _buf: &[u8],
+        ) -> Poll<io::Result<usize>> {
+            Poll::Ready(Err(io::Error::other("stub write fail")))
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
 
     struct IoHarness {
         client: Option<DuplexStream>,
@@ -481,6 +520,93 @@ mod tests {
 
         let unexpected = internal_rx.try_recv().ok();
         assert!(unexpected.is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn reader_task_emits_error_on_read_failure() -> Result<(), ()> {
+        let (internal_tx, mut internal_rx) = mpsc::channel(8);
+        let join = spawn_reader_task_io(FailReader, internal_tx);
+
+        let event = async_ok!(200, internal_rx.recv()).ok_or(())?;
+        match event {
+            InternalEvent::ConnectionError { .. } => {}
+            _ => return Err(()),
+        }
+
+        match async_ok!(200, join) {
+            Ok(Err(NetError::Io(_))) => {}
+            _ => return Err(()),
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn reader_task_emits_error_on_corrupt_frame() -> Result<(), ()> {
+        let mut harness = IoHarness::connect();
+        let (reader, _writer) = harness.split_client();
+        let (internal_tx, mut internal_rx) = mpsc::channel(8);
+
+        let join = spawn_reader_task_io(reader, internal_tx);
+
+        // Write a frame whose header promises N bytes of JSON but the payload is invalid
+        let payload = b"{invalid_json}";
+        let len = u32::try_from(payload.len())
+            .expect("payload fits u32")
+            .to_be_bytes();
+        let server = harness.server_mut();
+        server.write_all(&len).await.map_err(|_e| ())?;
+        server.write_all(payload).await.map_err(|_e| ())?;
+        server.flush().await.map_err(|_e| ())?;
+
+        let event = async_ok!(200, internal_rx.recv()).ok_or(())?;
+        match event {
+            InternalEvent::ConnectionError { .. } => {}
+            _ => return Err(()),
+        }
+
+        match async_ok!(200, join) {
+            Ok(Err(NetError::Protocol(_))) => {}
+            _ => return Err(()),
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn writer_task_emits_error_on_write_failure() -> Result<(), ()> {
+        let (packet_tx, packet_rx) = mpsc::channel(8);
+        let (internal_tx, mut internal_rx) = mpsc::channel(8);
+        let join = spawn_writer_task_io(FailWriter, packet_rx, internal_tx);
+
+        async_ok!(200, packet_tx.send(ClientPacket::Ping)).map_err(|_e| ())?;
+
+        let event = async_ok!(200, internal_rx.recv()).ok_or(())?;
+        match event {
+            InternalEvent::ConnectionError { .. } => {}
+            _ => return Err(()),
+        }
+
+        match async_ok!(200, join) {
+            Ok(Err(NetError::Io(_))) => {}
+            _ => return Err(()),
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn session_handle_shutdown_clean() -> Result<(), ()> {
+        let mut harness = IoHarness::connect();
+        let (reader, writer) = harness.split_client();
+        let (packet_tx, packet_rx) = mpsc::channel(8);
+        let (internal_tx, _internal_rx) = mpsc::channel(8);
+
+        let reader_task = spawn_reader_task_io(reader, internal_tx.clone());
+        let writer_task = spawn_writer_task_io(writer, packet_rx, internal_tx);
+        let handle = SessionHandle::new(packet_tx, reader_task, writer_task);
+
+        // Dropping packet_tx causes the writer task to drain and exit cleanly.
+        // The reader task is aborted. Both should complete without error.
+        async_ok!(200, handle.shutdown()).map_err(|_e| ())?;
         Ok(())
     }
 }

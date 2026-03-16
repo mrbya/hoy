@@ -4,7 +4,7 @@ use tokio::sync::mpsc;
 use crate::server::client_id::ClientId;
 
 /// Commands sent to the central server state taks.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ServerCommand {
     /// A new client connection was established.
     Connected {

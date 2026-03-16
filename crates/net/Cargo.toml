@@ -1,6 +1,6 @@
 [package]
 name = "hoy-net"
-version = "0.1.0"
+version = "0.2.0"
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -16,6 +16,7 @@ description = "Hoy real-time chat netGcrate"
 hoy-protocol.workspace = true
 tokio.workspace = true
 thiserror.workspace = true
+hoy-core.workspace = true
 
 [dev-dependencies]
 criterion = "0.8"

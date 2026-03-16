@@ -1,5 +1,7 @@
 use std::net::SocketAddr;
 
+use hoy_protocol::packet::MessageRecord;
+
 /**
  * Events emmited by the client core towards the frontend.
  *
@@ -50,6 +52,20 @@ pub enum ClientEvent {
     Error {
         /// Error message.
         message: String,
+    },
+
+    /// Succesfully joined a room.
+    RoomJoined {
+        /// Name of the room joined.
+        room: String,
+        /// Message history.
+        messages: Vec<MessageRecord>,
+    },
+
+    /// Received list of available rooms.
+    RoomList {
+        /// List of available rooms.
+        rooms: Vec<String>,
     },
 
     /// Pong response from the connected server.

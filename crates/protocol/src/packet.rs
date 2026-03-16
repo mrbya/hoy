@@ -19,6 +19,15 @@ pub enum ClientPacket {
 
     /// Heartbeat ping.
     Ping,
+
+    /// Request to join or create a room.
+    JoinRoom {
+        /// Name of the room client is requesting to join.
+        room: String,
+    },
+
+    /// Request the list of all known rooms.
+    ListRooms,
 }
 
 /// Server-to-client protocol packets.
@@ -58,4 +67,27 @@ pub enum ServerPacket {
 
     /// Heartbeat ping response.
     Pong,
+
+    /// Confirms the client had successfully joined a room.
+    RoomJoined {
+        /// Name of the room the client had joined.
+        room: String,
+        /// Message history..
+        messages: Vec<MessageRecord>,
+    },
+
+    /// Response to `ListRooms`,
+    RoomList {
+        /// List of available rooms.
+        rooms: Vec<String>,
+    },
+}
+
+/// Message record for serialized packets.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MessageRecord {
+    /// Sender display name.
+    pub from: String,
+    /// Message text.
+    pub text: String,
 }

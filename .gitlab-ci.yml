@@ -4,6 +4,12 @@ stages:
   - test
   - coverage
 
+workflow:
+  rules:
+    # only run on MRs and master branch
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == "master"
+
 test:
   stage: test
   artifacts:

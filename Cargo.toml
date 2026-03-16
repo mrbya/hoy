@@ -8,17 +8,15 @@ members = [
 ]
 
 [workspace.dependencies]
-hoy-core = { version = "0.0.1-pre1", path = "crates/core" }
-hoy-net = { version = "0.1.0", path = "crates/net"}
-hoy-protocol = { version = "0.1.0", path = "crates/protocol"}
+hoy-core = { version = "0.1.0", path = "crates/core" }
+hoy-net = { version = "0.2.0", path = "crates/net"}
+hoy-protocol = { version = "0.2.0", path = "crates/protocol"}
 hoy-tui = { version = "0.0.1-pre1", path = "crates/tui" }
-hoy-test = { version = "0.1.0", path = "crates/test" }
+hoy-test = { version = "0.1.1", path = "crates/test" }
 thiserror = "2.0.18"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
 
 [workspace.package]
 authors = ["mrbya <v.toth.svk2@gmail.com>"]
@@ -34,7 +32,7 @@ categories = ["command-line-utilities"]
 
 [package]
 name = "hoy"
-version = "0.1.0"
+version = "0.1.1"
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -56,21 +54,21 @@ path = "src/main.rs"
 full = []
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
 tokio.workspace = true
 hoy-core.workspace = true
 hoy-net.workspace = true
 hoy-protocol.workspace = true
 hoy-tui.workspace = true
-serde_json = "1.0.149"
 thiserror.workspace = true
+serde_json = "1.0.149"
+clap = { version = "4", features = ["derive"] }
 
 [dev-dependencies]
 criterion = "0.8"
 pretty_assertions = "1"
 
 [package.metadata.cargo-udeps.ignore]
-normal = ["hoy-core", "hoy-tui"]
+normal = ["hoy-tui"]
 development = ["criterion", "pretty_assertions"]
 
 [package.metadata.playground]

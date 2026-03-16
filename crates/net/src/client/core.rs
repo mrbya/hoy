@@ -112,6 +112,32 @@ impl ClientHandle {
     }
 
     /**
+     * Requests a [`ClientCommand::JoinRoom`] packet to be sent.
+     *
+     * # Returns
+     * `Ok(())` on request sending success.
+     *
+     * # Errors
+     * Returns `NetError` if client core is no longer accepting commands.
+     */
+    pub async fn join_room(&self, room: String) -> Result<(), NetError> {
+        self.send(ClientCommand::JoinRoom { room }).await
+    }
+
+    /**
+     * Requests a [`ClientCommand::ListRooms`] packet to be sent.
+     *
+     * # Returns
+     * `Ok(())` on request sending success.
+     *
+     * # Errors
+     * Returns `NetError` if client core is no longer accepting commands.
+     */
+    pub async fn list_rooms(&self) -> Result<(), NetError> {
+        self.send(ClientCommand::ListRooms).await
+    }
+
+    /**
      * Requests a shutdown of the client core.
      *
      * # Returns
@@ -334,51 +360,43 @@ where
         }
 
         ClientCommand::SendMessage { text } => {
-            if !state.is_connected() {
-                return emit_error(event_tx, "Client is not connected").await;
-            }
-
-            let Some(packet_tx) = state.packet_tx().cloned() else {
-                return emit_error(event_tx, "Client session is unavailable").await;
-            };
-
-            let send_result = packet_tx.send(ClientPacket::SendMessage { text }).await;
-            if let Err(e) = send_result {
-                let _ = e;
-                shutdown_state(state).await;
-
-                if !emit_error(event_tx, "Failed to send message to active session").await {
-                    return false;
-                }
-
-                emit_event(event_tx, ClientEvent::Disconnected).await
-            } else {
-                true
-            }
+            handle_generic_command(
+                state,
+                event_tx,
+                ClientPacket::SendMessage { text },
+                "Failed to send message to active session",
+            )
+            .await
         }
 
         ClientCommand::Ping => {
-            if !state.is_connected() {
-                return emit_error(event_tx, "Client is not connected").await;
-            }
+            handle_generic_command(
+                state,
+                event_tx,
+                ClientPacket::Ping,
+                "Failed to send ping to active session",
+            )
+            .await
+        }
 
-            let Some(packet_tx) = state.packet_tx().cloned() else {
-                return emit_error(event_tx, "Client session is unavailable").await;
-            };
+        ClientCommand::JoinRoom { room } => {
+            handle_generic_command(
+                state,
+                event_tx,
+                ClientPacket::JoinRoom { room },
+                "Failed to send a request to join a room",
+            )
+            .await
+        }
 
-            let send_result = packet_tx.send(ClientPacket::Ping).await;
-            if let Err(e) = send_result {
-                let _ = e;
-                shutdown_state(state).await;
-
-                if !emit_error(event_tx, "Failed to send ping to active session").await {
-                    return false;
-                }
-
-                emit_event(event_tx, ClientEvent::Disconnected).await
-            } else {
-                true
-            }
+        ClientCommand::ListRooms => {
+            handle_generic_command(
+                state,
+                event_tx,
+                ClientPacket::ListRooms,
+                "Failed to request a list of available rooms",
+            )
+            .await
         }
 
         ClientCommand::Shutdown => {
@@ -391,6 +409,51 @@ where
 
             false
         }
+    }
+}
+
+/**
+ * Generic command handler that:
+ * 1. checks if client connected,
+ * 2. if client session available sends a packet
+ * 3. shutsdown state and disconnects client if fails.
+ *
+ * # Arguments
+ * - `state`: client state to mutate,
+ * - `event_tx`: ui-facing event channel stream,
+ * - `packet`: packet to send in response to command,
+ * - `message`: error message if execution fails.
+ *
+ * # Returns
+ * - `true` if client loop should continue running,
+ * - `false` if it should terminate.
+ */
+async fn handle_generic_command(
+    state: &mut ClientState,
+    event_tx: &mpsc::Sender<ClientEvent>,
+    packet: ClientPacket,
+    message: &str,
+) -> bool {
+    if !state.is_connected() {
+        return emit_error(event_tx, "Client is not connected").await;
+    }
+
+    let Some(packet_tx) = state.packet_tx().cloned() else {
+        return emit_error(event_tx, "Client session is unavailable").await;
+    };
+
+    let send_result = packet_tx.send(packet).await;
+    if let Err(e) = send_result {
+        let _ = e;
+        shutdown_state(state).await;
+
+        if !emit_error(event_tx, message).await {
+            return false;
+        }
+
+        emit_event(event_tx, ClientEvent::Disconnected).await
+    } else {
+        true
     }
 }
 
@@ -524,6 +587,22 @@ async fn handle_server_packet(
             }
 
             emit_event(event_tx, ClientEvent::Pong).await
+        }
+
+        ServerPacket::RoomJoined { room, messages } => {
+            if state.is_disconnected() {
+                return true;
+            }
+
+            emit_event(event_tx, ClientEvent::RoomJoined { room, messages }).await
+        }
+
+        ServerPacket::RoomList { rooms } => {
+            if state.is_disconnected() {
+                return true;
+            }
+
+            emit_event(event_tx, ClientEvent::RoomList { rooms }).await
         }
     }
 }
@@ -811,6 +890,232 @@ mod tests {
         }
 
         assert!(state.is_disconnected());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn connect_while_awaiting_welcome_emits_error() -> Result<(), ()> {
+        let addr = SocketAddr::from(([127, 0, 0, 1], 5555));
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let (internal_tx, _internal_rx) = mpsc::channel(8);
+        let mut state = ClientState::AwaitingWelcome {
+            server_addr: addr,
+            username: String::from("alice"),
+            session: dummy_session(),
+        };
+
+        let command = ClientCommand::Connect {
+            server_addr: addr,
+            username: String::from("bob"),
+        };
+        let spawner = |_addr: SocketAddr, _internal: mpsc::Sender<InternalEvent>| async {
+            Ok::<SessionHandle, NetError>(dummy_session())
+        };
+
+        let should_continue = async_ok!(
+            200,
+            handle_command_with_spawner(&mut state, command, &event_tx, &internal_tx, spawner)
+        );
+        assert!(should_continue);
+
+        let event = recv_event(&mut event_rx).await.ok_or(())?;
+        assert!(matches!(event, ClientEvent::Error { .. }));
+        assert!(state.is_awaiting_welcome());
+        shutdown_state(&mut state).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn connect_session_spawn_error_emits_error() -> Result<(), ()> {
+        let addr = SocketAddr::from(([127, 0, 0, 1], 5555));
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let (internal_tx, _internal_rx) = mpsc::channel(8);
+        let mut state = ClientState::default();
+
+        let command = ClientCommand::Connect {
+            server_addr: addr,
+            username: String::from("alice"),
+        };
+        let spawner = |_addr: SocketAddr, _internal: mpsc::Sender<InternalEvent>| async {
+            Err::<SessionHandle, NetError>(NetError::Io(std::io::Error::other("stub spawn fail")))
+        };
+
+        let should_continue = async_ok!(
+            200,
+            handle_command_with_spawner(&mut state, command, &event_tx, &internal_tx, spawner)
+        );
+        assert!(should_continue);
+
+        let first = recv_event(&mut event_rx).await.ok_or(())?;
+        assert!(matches!(first, ClientEvent::Connecting { .. }));
+        let second = recv_event(&mut event_rx).await.ok_or(())?;
+        assert!(matches!(second, ClientEvent::Error { .. }));
+        assert!(state.is_disconnected());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn disconnect_while_disconnected_is_no_op() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let (internal_tx, _internal_rx) = mpsc::channel(8);
+        let mut state = ClientState::default();
+
+        let should_continue = async_ok!(
+            200,
+            handle_command(
+                &mut state,
+                ClientCommand::Disconnect,
+                &event_tx,
+                &internal_tx
+            )
+        );
+        assert!(should_continue);
+        assert!(state.is_disconnected());
+        event_rx.try_recv().expect_err("no event should be emitted");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn shutdown_while_connected_emits_disconnected() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let (internal_tx, _internal_rx) = mpsc::channel(8);
+        let mut state = ClientState::Connected {
+            server_addr: SocketAddr::from(([127, 0, 0, 1], 1234)),
+            username: String::from("alice"),
+            room: String::from("#general"),
+            session: dummy_session(),
+        };
+
+        let should_continue = async_ok!(
+            200,
+            handle_command(&mut state, ClientCommand::Shutdown, &event_tx, &internal_tx)
+        );
+        assert!(!should_continue);
+
+        let event = recv_event(&mut event_rx).await.ok_or(())?;
+        assert!(matches!(event, ClientEvent::Disconnected));
+        assert!(state.is_disconnected());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn join_room_and_list_rooms_while_not_connected_emit_errors() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let (internal_tx, _internal_rx) = mpsc::channel(8);
+        let mut state = ClientState::default();
+
+        let join_should_continue = async_ok!(
+            200,
+            handle_command(
+                &mut state,
+                ClientCommand::JoinRoom {
+                    room: String::from("#general")
+                },
+                &event_tx,
+                &internal_tx
+            )
+        );
+        assert!(join_should_continue);
+
+        let list_should_continue = async_ok!(
+            200,
+            handle_command(
+                &mut state,
+                ClientCommand::ListRooms,
+                &event_tx,
+                &internal_tx
+            )
+        );
+        assert!(list_should_continue);
+
+        let first = recv_event(&mut event_rx).await.ok_or(())?;
+        assert!(matches!(first, ClientEvent::Error { .. }));
+        let second = recv_event(&mut event_rx).await.ok_or(())?;
+        assert!(matches!(second, ClientEvent::Error { .. }));
+        assert!(state.is_disconnected());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn connection_closed_while_disconnected_is_no_op() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let mut state = ClientState::default();
+
+        let should_continue = async_ok!(
+            200,
+            handle_internal_event(&mut state, InternalEvent::ConnectionClosed, &event_tx)
+        );
+        assert!(should_continue);
+        assert!(state.is_disconnected());
+        event_rx.try_recv().expect_err("no event should be emitted");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn connection_error_while_disconnected_is_no_op() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let mut state = ClientState::default();
+
+        let event = InternalEvent::ConnectionError {
+            message: String::from("some error"),
+        };
+        let should_continue = async_ok!(200, handle_internal_event(&mut state, event, &event_tx));
+        assert!(should_continue);
+        assert!(state.is_disconnected());
+        event_rx.try_recv().expect_err("no event should be emitted");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn welcome_in_wrong_state_emits_error() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let mut state = ClientState::default(); // Disconnected
+
+        let event = InternalEvent::PacketReceived(ServerPacket::Welcome {
+            username: String::from("alice"),
+            room: String::from("#general"),
+        });
+        let should_continue = async_ok!(200, handle_internal_event(&mut state, event, &event_tx));
+        assert!(should_continue);
+
+        let emitted = recv_event(&mut event_rx).await.ok_or(())?;
+        assert!(matches!(emitted, ClientEvent::Error { .. }));
+        assert!(state.is_disconnected());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn packets_while_disconnected_are_ignored() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let packets = vec![
+            ServerPacket::ChatMessage {
+                from: String::from("a"),
+                room: String::from("r"),
+                text: String::from("t"),
+            },
+            ServerPacket::SystemMessage {
+                text: String::from("s"),
+            },
+            ServerPacket::Error {
+                message: String::from("e"),
+            },
+            ServerPacket::Pong,
+            ServerPacket::RoomJoined {
+                room: String::from("r"),
+                messages: vec![],
+            },
+            ServerPacket::RoomList { rooms: vec![] },
+        ];
+
+        for packet in packets {
+            let mut state = ClientState::default();
+            let event = InternalEvent::PacketReceived(packet);
+            let should_continue =
+                async_ok!(200, handle_internal_event(&mut state, event, &event_tx));
+            assert!(should_continue);
+        }
+
+        event_rx.try_recv().expect_err("no event should be emitted");
         Ok(())
     }
 

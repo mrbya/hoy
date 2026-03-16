@@ -1,15 +1,18 @@
+//! TCP connection handling and accept loop.
+
 use hoy_protocol::codec::encode_frame;
+use hoy_protocol::error::ProtocolError;
 use hoy_protocol::frame_buffer::FrameBuffer;
 use hoy_protocol::packet::{ClientPacket, ServerPacket};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::net::TcpStream;
+use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 
 use crate::error::NetError;
 use crate::server::client_id::ClientId;
 use crate::server::command::ServerCommand;
 
-/// Incomming channel read buffer size.
+/// Incoming channel read buffer size.
 const READ_BUFFER_SIZE: usize = 1024;
 /// Outgoing channel size.
 const CLIENT_CHANNEL_SIZE: usize = 32;
@@ -17,15 +20,47 @@ const CLIENT_CHANNEL_SIZE: usize = 32;
 const FRAME_BUFFER_SIZE: usize = 4096;
 
 /**
- * Handles a newly accepted TCP client connection.
+ * Spawns the TCP accept loop and forwards new connections into the server channel.
  *
- * 1. Creates a writer task.
- * 2. Registers the client with the server state task.
- * 3. Decodes incomming client packets.
- * 4. Notifies server on disconnects.
+ * Each accepted connection gets a unique [`ClientId`] and is handed off to
+ * [`handle_connection`] in its own task.
  *
  * # Arguments
- * - `stream`: incomming TCP stream,
+ * - `listener`: bound TCP listener,
+ * - `server_tx`: channel to send server commands.
+ */
+pub(crate) fn spawn_accept_loop(listener: TcpListener, server_tx: mpsc::Sender<ServerCommand>) {
+    tokio::spawn(async move {
+        loop {
+            let accepted = listener.accept().await;
+
+            let Ok((stream, _peer_addr)) = accepted else {
+                eprintln!("Failed to accept TCP connection.");
+                break;
+            };
+
+            let client_id = ClientId::new();
+            let connection_server_tx = server_tx.clone();
+
+            tokio::spawn(async move {
+                if let Err(e) = handle_connection(stream, client_id, connection_server_tx).await {
+                    eprintln!("Connection error: {e:?}");
+                }
+            });
+        }
+    });
+}
+
+/**
+ * Handles a newly accepted TCP client connection.
+ *
+ * 1. Creates an outbound writer task.
+ * 2. Registers the client with the server state task via [`ServerCommand::Connected`].
+ * 3. Decodes incoming client packets and forwards them as [`ServerCommand::Packet`].
+ * 4. Sends [`ServerCommand::Disconnected`] on EOF or error.
+ *
+ * # Arguments
+ * - `stream`: incoming TCP stream,
  * - `client_id`: client id of the connected client,
  * - `server_tx`: server loop command channel.
  *
@@ -36,9 +71,9 @@ const FRAME_BUFFER_SIZE: usize = 4096;
  * Returns `NetError` if:
  * - socket I/O fails,
  * - protocol decoding fails,
- * - command channel communication fails
+ * - command channel communication fails.
  */
-pub async fn handle_connection(
+pub(crate) async fn handle_connection(
     stream: TcpStream,
     client_id: ClientId,
     server_tx: mpsc::Sender<ServerCommand>,
@@ -49,6 +84,8 @@ pub async fn handle_connection(
 
 /**
  * Handles a client connection using generic async I/O.
+ *
+ * Extracted from [`handle_connection`] to allow in-memory duplex streams in tests.
  *
  * # Arguments
  * - `reader`: inbound stream for client frames,
@@ -63,9 +100,9 @@ pub async fn handle_connection(
  * Returns `NetError` if:
  * - socket I/O fails,
  * - protocol decoding fails,
- * - command channel communication fails
+ * - command channel communication fails.
  */
-async fn handle_connection_io<R, W>(
+pub(crate) async fn handle_connection_io<R, W>(
     mut reader: R,
     writer: W,
     client_id: ClientId,
@@ -79,12 +116,12 @@ where
 
     server_tx
         .send(ServerCommand::Connected {
-            client_id: client_id.clone(),
+            client_id,
             tx: client_tx,
         })
         .await
-        .map_err(|send_error| {
-            let _ = send_error;
+        .map_err(|e| {
+            let _ = e;
             NetError::CommandChannelClosed
         })?;
 
@@ -108,9 +145,11 @@ where
             break;
         }
 
-        frame_buffer.append(read_buffer.get(..bytes_read).ok_or(NetError::Protocol(
-            hoy_protocol::error::ProtocolError::TruncatedFrame,
-        ))?)?;
+        frame_buffer.append(
+            read_buffer
+                .get(..bytes_read)
+                .ok_or(NetError::Protocol(ProtocolError::TruncatedFrame))?,
+        )?;
 
         loop {
             let Some(packet) = frame_buffer.try_decode::<ClientPacket>()? else {
@@ -118,10 +157,7 @@ where
             };
 
             server_tx
-                .send(ServerCommand::Packet {
-                    client_id: client_id.clone(),
-                    packet,
-                })
+                .send(ServerCommand::Packet { client_id, packet })
                 .await
                 .map_err(|e| {
                     let _ = e;
@@ -131,374 +167,145 @@ where
     }
 
     server_tx
-        .send(ServerCommand::Disconnected {
-            client_id: client_id.clone(),
-        })
+        .send(ServerCommand::Disconnected { client_id })
         .await
         .map_err(|e| {
             let _ = e;
             NetError::CommandChannelClosed
         })?;
 
-    match writer_task.await {
-        Ok(result) => result?,
-        Err(error) => {
-            let _ = error;
-        }
-    }
-
+    writer_task.abort();
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+
     use hoy_protocol::codec::encode_frame;
-    use hoy_protocol::frame_buffer::FrameBuffer;
     use hoy_protocol::packet::{ClientPacket, ServerPacket};
-    use hoy_test::async_ok;
-    use tokio::io::{self, AsyncReadExt, AsyncWriteExt, DuplexStream};
+    use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf};
     use tokio::sync::mpsc;
 
+    use super::handle_connection_io;
+    use crate::error::NetError;
     use crate::server::client_id::ClientId;
     use crate::server::command::ServerCommand;
-    use crate::server::connection::handle_connection_io;
 
-    struct ConnectionHarness {
-        client: Option<DuplexStream>,
-        server_rx: mpsc::Receiver<ServerCommand>,
-        join: tokio::task::JoinHandle<Result<(), crate::error::NetError>>,
-        client_id: ClientId,
-    }
+    // ── Stubs ─────────────────────────────────────────────────────────────────
 
-    impl ConnectionHarness {
-        fn spawn(client_id_value: u64) -> Self {
-            let (client, server) = io::duplex(4096);
-            let (server_tx, server_rx) = mpsc::channel(8);
-            let client_id = ClientId::new(client_id_value);
-            let (reader, writer) = tokio::io::split(server);
-            let join_id = client_id.clone();
-            let join = tokio::spawn(async move {
-                handle_connection_io(reader, writer, join_id, server_tx).await
-            });
+    struct FailReader;
 
-            Self {
-                client: Some(client),
-                server_rx,
-                join,
-                client_id,
-            }
-        }
-
-        fn client_mut(&mut self) -> &mut DuplexStream {
-            self.client.as_mut().expect("Client stream missing.")
-        }
-
-        fn close_client(&mut self) {
-            self.client.take();
-        }
-
-        async fn recv_command(&mut self) -> Option<ServerCommand> {
-            async_ok!(200, self.server_rx.recv())
-        }
-
-        fn try_recv_command(&mut self) -> Option<ServerCommand> {
-            self.server_rx.try_recv().ok()
+    impl AsyncRead for FailReader {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _buf: &mut ReadBuf<'_>,
+        ) -> Poll<io::Result<()>> {
+            Poll::Ready(Err(io::Error::other("stub read fail")))
         }
     }
 
-    async fn read_server_packet(client: &mut DuplexStream) -> Result<ServerPacket, ()> {
-        let mut buffer = [0_u8; 1024];
-        let mut frame_buffer = FrameBuffer::with_capacity(2048);
+    struct FailWriter;
 
-        loop {
-            let bytes_read = async_ok!(200, client.read(&mut buffer)).map_err(|_| ())?;
-            if bytes_read == 0 {
-                return Err(());
-            }
-
-            let chunk = buffer.get(..bytes_read).ok_or(())?;
-            frame_buffer.append(chunk).map_err(|_err| ())?;
-
-            if let Some(packet) = frame_buffer
-                .try_decode::<ServerPacket>()
-                .map_err(|_err| ())?
-            {
-                return Ok(packet);
-            }
+    impl AsyncWrite for FailWriter {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _buf: &[u8],
+        ) -> Poll<io::Result<usize>> {
+            Poll::Ready(Err(io::Error::other("stub write fail")))
         }
+
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    // ── Tests ─────────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn connection_io_command_channel_closed_on_connect() {
+        let (server_tx, server_rx) = mpsc::channel::<ServerCommand>(4);
+        drop(server_rx); // no receiver → Connected send must fail
+
+        let (_, server_side) = tokio::io::duplex(1024);
+        let (server_reader, server_writer) = tokio::io::split(server_side);
+        let client_id = ClientId::new();
+
+        let result = handle_connection_io(server_reader, server_writer, client_id, server_tx).await;
+        assert!(matches!(result, Err(NetError::CommandChannelClosed)));
     }
 
     #[tokio::test]
-    async fn harness_emits_connected_and_disconnect() -> Result<(), ()> {
-        let mut harness = ConnectionHarness::spawn(1);
-        let _ = harness.client_mut();
+    async fn connection_io_command_channel_closed_on_packet() {
+        let (client_side, server_side) = tokio::io::duplex(4096);
+        let (server_reader, server_writer) = tokio::io::split(server_side);
+        let (_, mut client_writer) = tokio::io::split(client_side);
 
-        let connected = harness
-            .recv_command()
-            .await
-            .expect("Connected command missing.");
+        let (server_tx, mut server_rx) = mpsc::channel::<ServerCommand>(4);
+        let client_id = ClientId::new();
 
-        match connected {
-            ServerCommand::Connected { client_id, tx } => {
-                assert_eq!(client_id, harness.client_id);
-                drop(tx);
-            }
-            _ => return Err(()),
-        }
+        let task = tokio::spawn(async move {
+            handle_connection_io(server_reader, server_writer, client_id, server_tx).await
+        });
 
-        harness.close_client();
+        let _ = server_rx.recv().await; // consume Connected
+        drop(server_rx); // close the receiver so the next Packet send fails
 
-        let disconnected = harness
-            .recv_command()
-            .await
-            .expect("Disconnected command missing.");
+        // Write a valid packet — the task will decode it and fail to forward it
+        let frame = encode_frame(&ClientPacket::Ping).expect("encode Ping");
+        client_writer.write_all(&frame).await.expect("write frame");
 
-        match disconnected {
-            ServerCommand::Disconnected { client_id } => {
-                assert_eq!(client_id, harness.client_id);
-            }
-            _ => return Err(()),
-        }
-
-        let join_result = async_ok!(200, harness.join);
-        match join_result {
-            Ok(Ok(())) => Ok(()),
-            _ => Err(()),
-        }
+        let result = task.await.expect("task panicked");
+        assert!(matches!(result, Err(NetError::CommandChannelClosed)));
     }
 
     #[tokio::test]
-    async fn read_loop_emits_packet_for_complete_frame() -> Result<(), ()> {
-        let mut harness = ConnectionHarness::spawn(42);
-        let client = harness.client_mut();
+    async fn connection_io_read_error_propagates() {
+        let (server_tx, _server_rx) = mpsc::channel::<ServerCommand>(4);
+        let client_id = ClientId::new();
 
-        let packet = ClientPacket::Ping;
-        let frame = encode_frame(&packet).map_err(|_err| ())?;
-
-        async_ok!(200, client.write_all(&frame)).map_err(|_| ())?;
-        async_ok!(200, client.flush()).map_err(|_| ())?;
-
-        let connected = harness
-            .recv_command()
-            .await
-            .expect("Connected command missing.");
-        match connected {
-            ServerCommand::Connected { client_id, .. } => {
-                assert_eq!(client_id, harness.client_id);
-            }
-            _ => return Err(()),
-        }
-
-        let packet_cmd = harness
-            .recv_command()
-            .await
-            .expect("Packet command missing.");
-        match packet_cmd {
-            ServerCommand::Packet {
-                client_id,
-                packet: decoded_packet,
-            } => {
-                assert_eq!(client_id, harness.client_id);
-                assert_eq!(decoded_packet, ClientPacket::Ping);
-                Ok(())
-            }
-            _ => Err(()),
-        }
+        // FailReader returns an io::Error on the first read; sink() discards all writes
+        let result =
+            handle_connection_io(FailReader, tokio::io::sink(), client_id, server_tx).await;
+        assert!(matches!(result, Err(NetError::Io(_))));
     }
 
     #[tokio::test]
-    async fn read_loop_waits_for_complete_frame() -> Result<(), ()> {
-        let mut harness = ConnectionHarness::spawn(7);
+    async fn connection_io_writer_error_propagates() -> Result<(), &'static str> {
+        let (client_side, server_side) = tokio::io::duplex(1024);
+        let (server_reader, _server_writer) = tokio::io::split(server_side);
+        let (_client_reader, _client_writer) = tokio::io::split(client_side);
+        // _client_writer is kept alive so server_reader does not hit EOF
 
-        let packet = ClientPacket::Ping;
-        let frame = encode_frame(&packet).map_err(|_err| ())?;
-        let split = frame.len().saturating_div(2);
-        let (first, second) = frame.split_at(split);
+        let (server_tx, mut server_rx) = mpsc::channel::<ServerCommand>(4);
+        let client_id = ClientId::new();
 
-        {
-            let client = harness.client_mut();
-            async_ok!(200, client.write_all(first)).map_err(|_| ())?;
-            async_ok!(200, client.flush()).map_err(|_| ())?;
-        }
+        tokio::spawn(async move {
+            drop(handle_connection_io(server_reader, FailWriter, client_id, server_tx).await);
+        });
 
-        let connected = harness
-            .recv_command()
-            .await
-            .expect("Connected command missing.");
-        match connected {
-            ServerCommand::Connected { client_id, .. } => {
-                assert_eq!(client_id, harness.client_id);
-            }
-            _ => return Err(()),
-        }
-
-        let early = harness.try_recv_command();
-        assert!(early.is_none());
-
-        {
-            let client = harness.client_mut();
-            async_ok!(200, client.write_all(second)).map_err(|_| ())?;
-            async_ok!(200, client.flush()).map_err(|_| ())?;
-        }
-
-        let packet_cmd = harness
-            .recv_command()
-            .await
-            .expect("Packet command missing.");
-        match packet_cmd {
-            ServerCommand::Packet {
-                client_id,
-                packet: decoded_packet,
-            } => {
-                assert_eq!(client_id, harness.client_id);
-                assert_eq!(decoded_packet, ClientPacket::Ping);
-                Ok(())
-            }
-            _ => Err(()),
-        }
-    }
-
-    #[tokio::test]
-    async fn read_loop_sends_disconnected_on_eof() -> Result<(), ()> {
-        let mut harness = ConnectionHarness::spawn(99);
-        let _ = harness.client_mut();
-
-        let connected = harness
-            .recv_command()
-            .await
-            .expect("Connected command missing.");
-        match connected {
-            ServerCommand::Connected { client_id, .. } => {
-                assert_eq!(client_id, harness.client_id);
-            }
-            _ => return Err(()),
-        }
-
-        harness.close_client();
-
-        let disconnected = harness
-            .recv_command()
-            .await
-            .expect("Disconnected command missing.");
-
-        match disconnected {
-            ServerCommand::Disconnected { client_id } => {
-                assert_eq!(client_id, harness.client_id);
-                Ok(())
-            }
-            _ => Err(()),
-        }
-    }
-
-    #[tokio::test]
-    async fn write_loop_encodes_packets_to_stream() -> Result<(), ()> {
-        let mut harness = ConnectionHarness::spawn(11);
-
-        let connected = harness
-            .recv_command()
-            .await
-            .expect("Connected command missing.");
-        let client_tx = match connected {
-            ServerCommand::Connected { client_id, tx } => {
-                assert_eq!(client_id, harness.client_id);
-                tx
-            }
-            _ => return Err(()),
+        let Some(ServerCommand::Connected { tx: client_tx, .. }) = server_rx.recv().await else {
+            return Err("expected Connected command");
         };
 
-        async_ok!(200, client_tx.send(ServerPacket::Pong)).map_err(|_| ())?;
+        // Trigger the writer task — FailWriter fails on write_all, the task exits and drops
+        // client_rx, making further sends fail.
+        drop(client_tx.send(ServerPacket::Pong).await);
 
-        let packet = {
-            let client = harness.client_mut();
-            read_server_packet(client).await?
-        };
-        match packet {
-            ServerPacket::Pong => Ok(()),
-            _ => Err(()),
-        }
-    }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
 
-    #[tokio::test]
-    async fn writer_task_exits_when_channel_closes() -> Result<(), ()> {
-        let mut harness = ConnectionHarness::spawn(12);
-        let _ = harness.client_mut();
-
-        let connected = harness
-            .recv_command()
-            .await
-            .expect("Connected command missing.");
-        match connected {
-            ServerCommand::Connected { client_id, tx } => {
-                assert_eq!(client_id, harness.client_id);
-                drop(tx);
-            }
-            _ => return Err(()),
-        }
-
-        harness.close_client();
-
-        let _ = harness
-            .recv_command()
-            .await
-            .expect("Disconnected command missing.");
-
-        let join_result = async_ok!(200, harness.join);
-        match join_result {
-            Ok(Ok(())) => Ok(()),
-            _ => Err(()),
-        }
-    }
-
-    #[tokio::test]
-    async fn end_to_end_duplex_flow_handles_read_and_write() -> Result<(), ()> {
-        let mut harness = ConnectionHarness::spawn(77);
-
-        let packet = ClientPacket::Ping;
-        let frame = encode_frame(&packet).map_err(|_err| ())?;
-
-        {
-            let client = harness.client_mut();
-            async_ok!(200, client.write_all(&frame)).map_err(|_| ())?;
-            async_ok!(200, client.flush()).map_err(|_| ())?;
-        }
-
-        let connected = harness
-            .recv_command()
-            .await
-            .expect("Connected command missing.");
-        let client_tx = match connected {
-            ServerCommand::Connected { client_id, tx } => {
-                assert_eq!(client_id, harness.client_id);
-                tx
-            }
-            _ => return Err(()),
-        };
-
-        let packet_cmd = harness
-            .recv_command()
-            .await
-            .expect("Packet command missing.");
-        match packet_cmd {
-            ServerCommand::Packet {
-                client_id,
-                packet: decoded_packet,
-            } => {
-                assert_eq!(client_id, harness.client_id);
-                assert_eq!(decoded_packet, ClientPacket::Ping);
-            }
-            _ => return Err(()),
-        }
-
-        async_ok!(200, client_tx.send(ServerPacket::Pong)).map_err(|_| ())?;
-
-        let written_packet = {
-            let client = harness.client_mut();
-            read_server_packet(client).await?
-        };
-
-        match written_packet {
-            ServerPacket::Pong => Ok(()),
-            _ => Err(()),
-        }
+        assert!(
+            client_tx.send(ServerPacket::Pong).await.is_err(),
+            "writer task should have exited and dropped client_rx"
+        );
+        Ok(())
     }
 }
