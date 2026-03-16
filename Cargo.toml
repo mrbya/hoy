@@ -32,7 +32,7 @@ categories = ["command-line-utilities"]
 
 [package]
 name = "hoy"
-version = "0.1.0"
+version = "0.1.1"
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true

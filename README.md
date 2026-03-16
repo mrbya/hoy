@@ -94,6 +94,10 @@ commands begin with `/`:
 Any other input is sent as a chat message and broadcast to all clients in the
 room.
 
+Valid room name:
+- Allowed characters: lowercase ASCII letters, Ascii digits, `_`, `-`
+- Length: 1-64 characters.
+
 ## Crates
 
 1. `hoy-core` - Shared domain logic
