@@ -82,10 +82,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     ];
 
-    store.ensure_room(&room1)?;
-    store.ensure_room(&room2)?;
+    store.ensure_room(&room1).await?;
+    store.ensure_room(&room2).await?;
     for message in messages {
-        store.append_message(message)?;
+        store.append_message(message).await?;
     }
 
     if args.server {
