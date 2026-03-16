@@ -63,6 +63,10 @@
     clippy::verbose_file_reads
 )]
 
+/// Hoy command-line interface.
+pub mod cli;
+/// SQLite-backed `ServerStore` implementation.
+pub mod dbstore;
 /// hoy-core error types.
 pub mod error;
 /// In-memory `ServerStore` implementation.

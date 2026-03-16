@@ -1,7 +1,7 @@
 //! Central server event loop.
 //!
-//! [`run_server`](core::run_server) binds the listener and owns both the live
-//! [`ServerState`](state::ServerState) and the
+//! [`run_server`](crate::server::core::run_server) binds the listener and owns both the live
+//! [`ServerState`](crate::server::state::ServerState) and the
 //! [`ServerStore`](hoy_core::store::ServerStore). All packet-level logic is
 //! delegated to [`handlers`].
 
@@ -21,8 +21,6 @@ use crate::server::handlers::{
 };
 use crate::server::state::ServerState;
 
-/// Default room every client is placed in after Hello handshake.
-const DEFAULT_ROOM: &str = RoomName::GENERAL;
 /// Size of the server command channel.
 const SERVER_COMMAND_CHANNEL_SIZE: usize = 128;
 
@@ -109,9 +107,6 @@ async fn handle_server_command(
  * Returns `NetError` if:
  * - the listening socket cannot be created,
  * - persisted rooms cannot be loaded from the store.
- *
- * # Panics
- * No panic expected as the default, hard-coded room name is valid.
  */
 pub async fn run_server(
     bind_addr: SocketAddr,
@@ -125,7 +120,7 @@ pub async fn run_server(
     let mut state = ServerState::default();
     let mut pending = PendingClients::default();
 
-    match store.load_rooms() {
+    match store.load_rooms().await {
         Ok(rooms) => {
             for record in rooms {
                 state.ensure_room(record.name.clone());
@@ -134,11 +129,33 @@ pub async fn run_server(
         Err(e) => return Err(NetError::InternalServerError(StateError::StoreError(e))),
     }
 
-    let default_room = RoomName::new(DEFAULT_ROOM).expect("Hardcoded default room name is valid");
-    if let Err(e) = store.ensure_room(&default_room) {
+    let default_room = RoomName::general();
+    if let Err(e) = store.ensure_room(&default_room).await {
         return Err(NetError::InternalServerError(StateError::StoreError(e)));
     }
     state.ensure_room(default_room.clone());
+
+    println!(
+        r"
+
+ █████   █████                     ███
+▒▒███   ▒▒███                     ▒███
+ ▒███    ▒███   ██████  █████ ████▒███     █████   ██████  ████████  █████ █████  ██████  ████████
+ ▒███████████  ███▒▒███▒▒███ ▒███ ▒███    ███▒▒   ███▒▒███▒▒███▒▒███▒▒███ ▒▒███  ███▒▒███▒▒███▒▒███
+ ▒███▒▒▒▒▒███ ▒███ ▒███ ▒███ ▒███ ▒███   ▒▒█████ ▒███████  ▒███ ▒▒▒  ▒███  ▒███ ▒███████  ▒███ ▒▒▒
+ ▒███    ▒███ ▒███ ▒███ ▒███ ▒███ ▒▒▒     ▒▒▒▒███▒███▒▒▒   ▒███      ▒▒███ ███  ▒███▒▒▒   ▒███
+ █████   █████▒▒██████  ▒▒███████  ███    ██████ ▒▒██████  █████      ▒▒█████   ▒▒██████  █████
+▒▒▒▒▒   ▒▒▒▒▒  ▒▒▒▒▒▒    ▒▒▒▒▒███ ▒▒▒    ▒▒▒▒▒▒   ▒▒▒▒▒▒  ▒▒▒▒▒        ▒▒▒▒▒     ▒▒▒▒▒▒  ▒▒▒▒▒
+                         ███ ▒███
+                        ▒▒██████
+                         ▒▒▒▒▒▒
+
+Version:    {}
+Address:    {bind_addr}
+Storage:    {}",
+        env!("CARGO_PKG_VERSION"),
+        store.storage_slug()
+    );
 
     while let Some(command) = server_rx.recv().await {
         handle_server_command(&mut state, &mut store, &mut pending, &default_room, command).await;
@@ -160,12 +177,15 @@ mod tests {
 
     use crate::server::client_id::ClientId;
     use crate::server::command::ServerCommand;
-    use crate::server::core::{DEFAULT_ROOM, handle_server_command};
+    use crate::server::core::handle_server_command;
     use crate::server::handlers::{
         PendingClients, broadcast_to_room, handle_hello, handle_join_room, handle_list_rooms,
         handle_send_message,
     };
     use crate::server::state::ServerState;
+
+    /// Default room every client is placed in after Hello handshake.
+    const DEFAULT_ROOM: &str = RoomName::GENERAL;
 
     // ── Harness ───────────────────────────────────────────────────────────────
 
@@ -177,11 +197,12 @@ mod tests {
     }
 
     impl TestHarness {
-        fn new() -> Self {
+        async fn new() -> Self {
             let mut store = InMemoryStore::new();
             let general = default_room();
             store
                 .ensure_room(&general)
+                .await
                 .expect("default room setup failed");
             let mut state = ServerState::default();
             state.ensure_room(general);
@@ -256,9 +277,12 @@ mod tests {
     }
 
     impl StoreStub {
-        fn failing_ensure_room() -> Self {
+        async fn failing_ensure_room() -> Self {
             let mut inner = InMemoryStore::new();
-            inner.ensure_room(&default_room()).expect("default room");
+            inner
+                .ensure_room(&default_room())
+                .await
+                .expect("default room");
             Self {
                 fail_ensure_room: true,
                 fail_load_messages: false,
@@ -266,9 +290,12 @@ mod tests {
             }
         }
 
-        fn failing_load_messages() -> Self {
+        async fn failing_load_messages() -> Self {
             let mut inner = InMemoryStore::new();
-            inner.ensure_room(&default_room()).expect("default room");
+            inner
+                .ensure_room(&default_room())
+                .await
+                .expect("default room");
             Self {
                 fail_ensure_room: false,
                 fail_load_messages: true,
@@ -278,22 +305,22 @@ mod tests {
     }
 
     impl ServerStore for StoreStub {
-        fn ensure_room(&mut self, name: &RoomName) -> Result<(), StoreError> {
+        async fn ensure_room(&mut self, name: &RoomName) -> Result<(), StoreError> {
             if self.fail_ensure_room {
                 return Err(StoreError::Internal("stub: ensure_room failure".into()));
             }
-            self.inner.ensure_room(name)
+            self.inner.ensure_room(name).await
         }
 
-        fn load_rooms(&self) -> Result<Vec<RoomRecord>, StoreError> {
-            self.inner.load_rooms()
+        async fn load_rooms(&self) -> Result<Vec<RoomRecord>, StoreError> {
+            self.inner.load_rooms().await
         }
 
-        fn append_message(&mut self, msg: StoredMessage) -> Result<(), StoreError> {
-            self.inner.append_message(msg)
+        async fn append_message(&mut self, msg: StoredMessage) -> Result<(), StoreError> {
+            self.inner.append_message(msg).await
         }
 
-        fn load_recent_messages(
+        async fn load_recent_messages(
             &self,
             room: &RoomName,
             limit: usize,
@@ -301,7 +328,11 @@ mod tests {
             if self.fail_load_messages {
                 return Err(StoreError::Internal("stub: load_messages failure".into()));
             }
-            self.inner.load_recent_messages(room, limit)
+            self.inner.load_recent_messages(room, limit).await
+        }
+
+        fn storage_slug(&self) -> String {
+            String::from("Storage stub")
         }
     }
 
@@ -309,7 +340,7 @@ mod tests {
 
     #[tokio::test]
     async fn hello_sends_welcome_and_broadcasts_join() -> Result<(), ()> {
-        let mut h = TestHarness::new();
+        let mut h = TestHarness::new().await;
         let joiner = h.add_pending_client();
         let observer = h.add_identified_client("observer");
 
@@ -332,8 +363,8 @@ mod tests {
         assert_eq!(username, "alice");
         assert_eq!(room, DEFAULT_ROOM);
 
-        // handle_hello broadcasts the join, then calls handle_join_room internally.
-        // The observer therefore receives two SystemMessages: one from each.
+        // handle_hello calls handle_join_room internally, which broadcasts the join
+        // once to all room members except the joiner.
         let ServerPacket::SystemMessage { text } = h.recv(observer).await.ok_or(())? else {
             return Err(());
         };
@@ -353,18 +384,6 @@ mod tests {
             "no message history expected on first join"
         );
 
-        // Second join broadcast from handle_join_room reaches the observer.
-        let ServerPacket::SystemMessage {
-            text: second_join_text,
-        } = h.recv(observer).await.ok_or(())?
-        else {
-            return Err(());
-        };
-        assert!(
-            second_join_text.contains("alice"),
-            "second join message should mention alice"
-        );
-
         // The joiner must not receive the join broadcast about themselves.
         h.assert_no_packet(joiner);
         h.assert_no_packet(observer);
@@ -373,7 +392,7 @@ mod tests {
 
     #[tokio::test]
     async fn hello_rejects_duplicate_for_same_client() -> Result<(), ()> {
-        let mut h = TestHarness::new();
+        let mut h = TestHarness::new().await;
         let id = h.add_identified_client("bruce_lee");
 
         async_ok!(
@@ -396,7 +415,7 @@ mod tests {
 
     #[tokio::test]
     async fn hello_rejects_username_collision() -> Result<(), ()> {
-        let mut h = TestHarness::new();
+        let mut h = TestHarness::new().await;
         let _existing = h.add_identified_client("bruce_lee");
         let newcomer = h.add_pending_client();
 
@@ -423,7 +442,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_message_before_hello_produces_no_broadcast() -> Result<(), ()> {
-        let mut h = TestHarness::new();
+        let mut h = TestHarness::new().await;
         let id = h.add_pending_client();
 
         h.dispatch(ServerCommand::Packet {
@@ -439,7 +458,7 @@ mod tests {
 
     #[tokio::test]
     async fn send_message_broadcasts_to_room_members() -> Result<(), ()> {
-        let mut h = TestHarness::new();
+        let mut h = TestHarness::new().await;
         let sender = h.add_identified_client("alice");
         let receiver = h.add_identified_client("bob");
 
@@ -476,7 +495,7 @@ mod tests {
 
     #[tokio::test]
     async fn ping_returns_pong_for_identified_client() -> Result<(), ()> {
-        let mut h = TestHarness::new();
+        let mut h = TestHarness::new().await;
         let id = h.add_identified_client("alice");
 
         h.dispatch(ServerCommand::Packet {
@@ -493,7 +512,7 @@ mod tests {
 
     #[tokio::test]
     async fn ping_returns_pong_for_pending_client() -> Result<(), ()> {
-        let mut h = TestHarness::new();
+        let mut h = TestHarness::new().await;
         let id = h.add_pending_client();
 
         h.dispatch(ServerCommand::Packet {
@@ -512,7 +531,7 @@ mod tests {
 
     #[tokio::test]
     async fn disconnect_named_client_broadcasts_leave() -> Result<(), ()> {
-        let mut h = TestHarness::new();
+        let mut h = TestHarness::new().await;
         let leaver = h.add_identified_client("alice");
         let observer = h.add_identified_client("bob");
 
@@ -528,7 +547,7 @@ mod tests {
 
     #[tokio::test]
     async fn disconnect_pending_client_does_not_broadcast() -> Result<(), ()> {
-        let mut h = TestHarness::new();
+        let mut h = TestHarness::new().await;
         let observer = h.add_identified_client("bob");
         let pending = h.add_pending_client();
 
@@ -543,7 +562,7 @@ mod tests {
 
     #[tokio::test]
     async fn join_room_sends_room_joined_and_broadcasts_leave() -> Result<(), ()> {
-        let mut h = TestHarness::new();
+        let mut h = TestHarness::new().await;
         let joiner = h.add_identified_client("alice");
         let observer = h.add_identified_client("bob");
 
@@ -570,7 +589,7 @@ mod tests {
 
     #[tokio::test]
     async fn join_room_rejects_invalid_room_name() -> Result<(), ()> {
-        let mut h = TestHarness::new();
+        let mut h = TestHarness::new().await;
         let id = h.add_identified_client("alice");
 
         async_ok!(
@@ -586,7 +605,7 @@ mod tests {
 
     #[tokio::test]
     async fn join_room_includes_message_history() -> Result<(), ()> {
-        let mut h = TestHarness::new();
+        let mut h = TestHarness::new().await;
         let alice = h.add_identified_client("alice");
         let bob = h.add_identified_client("bob");
 
@@ -624,7 +643,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_rooms_returns_sorted_room_names() -> Result<(), ()> {
-        let mut h = TestHarness::new();
+        let mut h = TestHarness::new().await;
         let id = h.add_identified_client("alice");
 
         async_ok!(
@@ -650,7 +669,7 @@ mod tests {
 
     #[tokio::test]
     async fn broadcast_skips_excluded_client() -> Result<(), ()> {
-        let mut h = TestHarness::new();
+        let mut h = TestHarness::new().await;
         let sender = h.add_identified_client("alice");
         let receiver = h.add_identified_client("bob");
 
@@ -673,7 +692,7 @@ mod tests {
 
     #[tokio::test]
     async fn broadcast_to_room_unknown_room_is_no_op() -> Result<(), ()> {
-        let mut h = TestHarness::new();
+        let mut h = TestHarness::new().await;
         let id = h.add_identified_client("alice");
         let unknown_room = RoomName::new("no-such-room").expect("valid name");
 
@@ -695,7 +714,7 @@ mod tests {
 
     #[tokio::test]
     async fn hello_missing_pending_entry_is_no_op() -> Result<(), ()> {
-        let mut h = TestHarness::new();
+        let mut h = TestHarness::new().await;
         let observer = h.add_identified_client("observer");
         // A fresh ClientId that was never added to pending or state.
         let unknown = ClientId::new();
@@ -728,7 +747,7 @@ mod tests {
             .add_client(id, "alice".to_owned(), general, tx)
             .expect("add_client failed");
 
-        let mut stub = StoreStub::failing_ensure_room();
+        let mut stub = StoreStub::failing_ensure_room().await;
         async_ok!(
             200,
             handle_join_room(&mut state, &mut stub, id, "new-room".into())
@@ -751,7 +770,7 @@ mod tests {
             .add_client(id, "alice".to_owned(), general, tx)
             .expect("add_client failed");
 
-        let mut stub = StoreStub::failing_load_messages();
+        let mut stub = StoreStub::failing_load_messages().await;
         async_ok!(
             200,
             handle_join_room(&mut state, &mut stub, id, "new-room".into())

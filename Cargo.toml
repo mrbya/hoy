@@ -8,8 +8,8 @@ members = [
 ]
 
 [workspace.dependencies]
-hoy-core = { version = "0.1.0", path = "crates/core" }
-hoy-net = { version = "0.2.0", path = "crates/net"}
+hoy-core = { version = "0.2.0", path = "crates/core" }
+hoy-net = { version = "0.2.1", path = "crates/net"}
 hoy-protocol = { version = "0.2.0", path = "crates/protocol"}
 hoy-tui = { version = "0.0.1-pre1", path = "crates/tui" }
 hoy-test = { version = "0.1.1", path = "crates/test" }
@@ -17,6 +17,9 @@ thiserror = "2.0.18"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
+clap = { version = "4", features = ["derive"] }
+directories = "6"
 
 [workspace.package]
 authors = ["mrbya <v.toth.svk2@gmail.com>"]
@@ -32,7 +35,7 @@ categories = ["command-line-utilities"]
 
 [package]
 name = "hoy"
-version = "0.1.1"
+version = "0.2.0"
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -50,6 +53,10 @@ publish = true
 name = "hoy"
 path = "src/main.rs"
 
+[[bin]]
+name = "hoy-incognito"
+path = "src/incognito.rs"
+
 [features]
 full = []
 
@@ -60,8 +67,7 @@ hoy-net.workspace = true
 hoy-protocol.workspace = true
 hoy-tui.workspace = true
 thiserror.workspace = true
-serde_json = "1.0.149"
-clap = { version = "4", features = ["derive"] }
+serde_json.workspace = true
 
 [dev-dependencies]
 criterion = "0.8"

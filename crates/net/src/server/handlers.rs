@@ -75,16 +75,6 @@ pub(crate) async fn handle_hello(
             )
             .await;
 
-            broadcast_to_room(
-                state,
-                default_room,
-                &ServerPacket::SystemMessage {
-                    text: format!("{username} joined #{default_room}"),
-                },
-                Some(client_id),
-            )
-            .await;
-
             handle_join_room(state, store, client_id, default_room.to_string()).await;
         }
 
@@ -128,11 +118,14 @@ pub(crate) async fn handle_send_message(
         return; // should be unreachable (username implies client had joined a room)
     };
 
-    if let Err(e) = store.append_message(StoredMessage {
-        room: room.clone(),
-        from: username.clone(),
-        text: text.clone(),
-    }) {
+    if let Err(e) = store
+        .append_message(StoredMessage {
+            room: room.clone(),
+            from: username.clone(),
+            text: text.clone(),
+        })
+        .await
+    {
         eprintln!("Message store error: {e}");
         // Non-fatal: broadcast even if storage erred out
     }
@@ -185,7 +178,7 @@ pub(crate) async fn handle_join_room(
         }
     };
 
-    if let Err(e) = store.ensure_room(&target) {
+    if let Err(e) = store.ensure_room(&target).await {
         eprintln!("Failed to create room entry for {target}: {e}");
         send_error(&tx, "Failed to create room entry").await;
         return;
@@ -208,7 +201,9 @@ pub(crate) async fn handle_join_room(
                 .await;
             }
 
-            let load_result = store.load_recent_messages(&target, MESSAGE_HISTORY_LIMIT);
+            let load_result = store
+                .load_recent_messages(&target, MESSAGE_HISTORY_LIMIT)
+                .await;
             let Ok(history) = load_result else {
                 eprintln!("Failed to load message history for {target}");
                 send_error(&tx, "Failed to load message history").await;

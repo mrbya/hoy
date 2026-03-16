@@ -1,4 +1,5 @@
 use std::fmt;
+use std::future::Future;
 
 use crate::error::StoreError;
 
@@ -59,6 +60,17 @@ impl RoomName {
         }
 
         Ok(Self(s))
+    }
+
+    /**
+     * Returns `general` room name.
+     *
+     * # Panics
+     * No panic expected as the default, hard-coded room name is valid.
+     */
+    #[must_use]
+    pub fn general() -> Self {
+        Self::new(Self::GENERAL).expect("Hardcoded default room name is valid")
     }
 
     /// Returns the room nae as a string slice.
@@ -122,7 +134,10 @@ pub trait ServerStore: Send + 'static {
      * # Errors
      * Returns `StoreError` if creation fails.
      */
-    fn ensure_room(&mut self, name: &RoomName) -> Result<(), StoreError>;
+    fn ensure_room(
+        &mut self,
+        name: &RoomName,
+    ) -> impl Future<Output = Result<(), StoreError>> + Send;
 
     /**
      * Returns all persisted rooms.
@@ -133,7 +148,7 @@ pub trait ServerStore: Send + 'static {
      * # Errors
      * Returns `StoreError` if the underlying store fails to read.
      */
-    fn load_rooms(&self) -> Result<Vec<RoomRecord>, StoreError>;
+    fn load_rooms(&self) -> impl Future<Output = Result<Vec<RoomRecord>, StoreError>> + Send;
 
     /**
      * Appends `msg` to the room's history.
@@ -146,7 +161,10 @@ pub trait ServerStore: Send + 'static {
      * - the room does not exist,
      * - write fails.
      */
-    fn append_message(&mut self, msg: StoredMessage) -> Result<(), StoreError>;
+    fn append_message(
+        &mut self,
+        msg: StoredMessage,
+    ) -> impl Future<Output = Result<(), StoreError>> + Send;
 
     /**
      * Loads up to `limit` of the most recent messages from `room`, oldest first.
@@ -167,7 +185,12 @@ pub trait ServerStore: Send + 'static {
         &self,
         room: &RoomName,
         limit: usize,
-    ) -> Result<Vec<StoredMessage>, StoreError>;
+    ) -> impl Future<Output = Result<Vec<StoredMessage>, StoreError>> + Send;
+
+    /**
+     * Returns storage type slug
+     */
+    fn storage_slug(&self) -> String;
 }
 
 #[cfg(test)]

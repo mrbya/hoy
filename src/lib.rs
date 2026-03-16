@@ -62,3 +62,30 @@
     clippy::unseparated_literal_suffix,
     clippy::verbose_file_reads
 )]
+
+use hoy_core::cli::Hoy;
+use hoy_core::store::ServerStore;
+use hoy_net::client::test_client::run_test_client;
+use hoy_net::server::core::run_server;
+
+/**
+ * Runs hoy binary with a provided storage.
+ *
+ * # Returns
+ * `Ok(())` on successful hoy exit.
+ *
+ * # Errors
+ * Returns a boxed error if the server or client encounters a fatal failure.
+ */
+pub async fn run_hoy(hoy: Hoy, store: impl ServerStore) -> Result<(), Box<dyn std::error::Error>> {
+    let address = hoy.resolve_address();
+
+    if hoy.run_server() {
+        run_server(address, store).await?;
+    } else {
+        let username = hoy.resolve_username()?;
+        run_test_client(address, username).await?;
+    }
+
+    Ok(())
+}

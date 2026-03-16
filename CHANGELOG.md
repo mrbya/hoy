@@ -2,6 +2,63 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-03-16
+
+### Added
+
+#### `hoy-core` — Domain Types
+
+- `dbstore` module: `DbStore` — a `SqlitePool`-backed `ServerStore` that persists room definitions and message history across server restarts.
+  - `DbStore::new(path)` — opens (or creates) the database at the given path, or resolves the platform data directory when `None` is passed (`~/.local/share/hoy/hoy.db` on Linux).
+  - `DbStore::close()` — explicitly closes the underlying connection pool.
+  - `DbStore::fetch_room_id(room)` — looks up the internal row ID for a room name.
+  - `ServerStore` impl: `ensure_room` uses `INSERT OR IGNORE`; `load_recent_messages` fetches via `ORDER BY id DESC LIMIT ?` and reverses to return oldest-first.
+  - Schema migrations (`migrations/`) applied automatically on construction: `0001_create_rooms.sql`, `0002_create_messages.sql`.
+- `cli` module: `Hoy` — CLI argument parsing and application bootstrap extracted from the binary.
+  - `Hoy::default()` — parses `std::env::args()` via `clap`.
+  - `Hoy::resolve_address()` — resolves bind/connect address from `--address` / `--port`.
+  - `Hoy::construct_store()` — opens the `DbStore` from `--db` or the platform default.
+  - `Hoy::incognito_store()` — returns a fresh `InMemoryStore` (no persistence).
+  - `Hoy::run_server()` — returns `true` when `-s/--server` was passed.
+  - `Hoy::resolve_username()` — returns the `--username` value or `HoyError::NoUsername`.
+- `ServerStore::storage_slug(&self) -> String` — new synchronous method on the trait; implementations return a human-readable label used in the server start-up banner.
+- `StoreError::NoDataDirectory` — emitted by `DbStore::new(None)` when the platform data directory cannot be resolved.
+- `StoreError::Io(std::io::Error)` — emitted when creating the storage directory fails.
+- `HoyError` enum in the `error` module: `NoUsername` variant emitted by `Hoy::resolve_username()` when `--username` was not supplied.
+
+#### `hoy-net` — Networking
+
+- Server start-up banner printed to stdout on `run_server`: ASCII art logo, crate version, bind address, and storage slug.
+
+#### Binary (`hoy`)
+
+- `src/lib.rs` added: `run_hoy(hoy: Hoy, store: impl ServerStore)` — orchestrates server or client mode; enables integration testing of the full binary logic without spawning a subprocess.
+- `src/main.rs` slimmed to three lines: parse CLI via `Hoy::default()`, open store, delegate to `run_hoy`.
+
+#### Binary (`hoy-incognito`)
+- added `hoy-incognito` binary running with `InMemoryStore` storage.
+
+#### Testing
+
+- `DbStore` unit tests (behind `tempfile` dev-dependency):
+  - `ensure_room_is_idempotent` — room created once despite two calls.
+  - `append_requires_room_to_exist` — `RoomNotFound` error when room is absent.
+  - `load_recent_respects_limit` — correct tail slice returned.
+  - `load_rooms_sorted` — rooms returned in alphabetical order.
+  - `storage_persistence` — data survives closing and reopening the database at the same path.
+
+### Changed
+
+#### `hoy-core` — Domain Types
+
+- `ServerStore` trait methods are now async, expressed as RPIT (`fn method() -> impl Future<Output = …> + Send`) for `Send`-safe use across tokio tasks.
+- `InMemoryStore` impl methods updated to `async fn`; all existing unit tests converted to `#[tokio::test]`.
+- CLI argument parsing (`clap`) and address/store resolution moved from `src/main.rs` into `hoy_core::cli::Hoy`; `clap` added as a regular dependency of `hoy-core`.
+
+#### Binary (`hoy`)
+
+- `src/main.rs` now delegates entirely to `hoy_core::cli::Hoy` and `run_hoy`; no longer contains argument parsing or store construction logic.
+
 ## [0.1.1] - 2026-03-16
 
 ### Added

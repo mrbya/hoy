@@ -23,7 +23,11 @@ test *FLAGS:
 
 # Build and run.
 run *FLAGS:
-    cargo run {{FLAGS}}
+    cargo run --bin hoy {{FLAGS}}
+
+# Build and run hoy-incognito bin.
+run-i *FLAGS:
+    cargo run --bin hoy-incognito {{FLAGS}}
 
 # Build release
 build *FLAGS:
@@ -77,6 +81,10 @@ install:
 package *FLAGS:
     cargo package --workspace --target-dir release {{FLAGS}}
 
+# Create db migration
+migrate *FLAGS:
+    sqlx migrate add --source ./crates/core/migrations --sequential {{FLAGS}}
+
 # Indexes README:
 index:
     markdown-toc -i ./README.md
@@ -129,6 +137,7 @@ init:
     cargo binstall cargo-udeps --no-confirm
     cargo binstall cargo-audit --no-confirm
     cargo binstall cargo-unused-features --no-confirm
+    cargo binstall sqlx-cli --no-confirm
     echo # installing markdown-toc
     npm list -g markdown-toc || npm install -g markdown-toc
     echo # Installing backlog

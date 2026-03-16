@@ -1,6 +1,6 @@
 [package]
 name = "hoy-core"
-version = "0.1.0"
+version = "0.2.0"
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -15,11 +15,16 @@ description = "Hoy real-time chat core crate"
 
 [dependencies]
 thiserror.workspace = true
+clap.workspace = true
+directories.workspace = true
+sqlx.workspace = true
 
 [dev-dependencies]
 criterion = "0.8"
 pretty_assertions = "1"
+tempfile = "3"
 hoy-test.workspace = true
+tokio.workspace = true
 
 [package.metadata.cargo-udeps.ignore]
 development = ["criterion", "pretty_assertions"]

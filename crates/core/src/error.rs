@@ -16,4 +16,20 @@ pub enum StoreError {
     /// A generic internal store failure.
     #[error("Internal store error: {0}")]
     Internal(String),
+
+    /// No data storage directory available.
+    #[error("Failed to resolve data storage directory.")]
+    NoDataDirectory,
+
+    /// I/O error while creating/accessing storage.
+    #[error("Io error: {0}")]
+    Io(#[from] std::io::Error),
+}
+
+/// Cli errors.
+#[derive(Debug, Error)]
+pub enum HoyError {
+    /// No username provided to cli when running client.
+    #[error("No client username provided.")]
+    NoUsername,
 }
