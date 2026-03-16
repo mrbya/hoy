@@ -51,10 +51,19 @@ There is no maximum payload size enforced beyond the `u32` ceiling (~4 GB).
 | `Welcome` | `username: String`, `room: String` | Handshake accepted; reports the assigned username and initial room |
 | `ChatMessage` | `from: String`, `room: String`, `text: String` | A chat message broadcast to room members |
 | `SystemMessage` | `text: String` | Server-generated event text (joins, leaves, etc.) |
-| `RoomJoined` | `room: String` | Confirms a successful room change |
+| `RoomJoined` | `room: String`, `messages: Vec<MessageRecord>` | Confirms a successful room change; includes message history (up to 50 recent entries, oldest first) |
 | `RoomList` | `rooms: Vec<String>` | Response to `ListRooms`; rooms are alphabetically sorted |
 | `Error` | `message: String` | Describes a protocol or application error |
 | `Pong` | — | Response to `Ping` |
+
+### `MessageRecord`
+
+A single message entry carried inside `RoomJoined.messages`:
+
+| Field | Type | Description |
+|---|---|---|
+| `from` | `String` | Sender display name |
+| `text` | `String` | Message body |
 
 ### JSON wire shapes
 
@@ -72,7 +81,7 @@ Serde serialises unit variants as plain JSON strings and struct variants as sing
 {"Welcome":       {"username": "alice", "room": "general"}}
 {"ChatMessage":   {"from": "alice", "room": "general", "text": "hello all"}}
 {"SystemMessage": {"text": "bob joined #general"}}
-{"RoomJoined":    {"room": "rust"}}
+{"RoomJoined":    {"room": "rust", "messages": [{"from": "alice", "text": "hey"}]}}
 {"RoomList":      {"rooms": ["general", "rust"]}}
 {"Error":         {"message": "Username \"bob\" is already in use"}}
 "Pong"

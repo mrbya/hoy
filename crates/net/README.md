@@ -66,10 +66,12 @@ Disconnected ──Connect──▶ AwaitingWelcome ──Welcome──▶ Conne
 | `Disconnected` | Session ends or error occurs |
 | `MessageReceived { from, room, text }` | `ChatMessage` received |
 | `SystemMessage { text }` | `SystemMessage` received |
-| `RoomJoined { room }` | `RoomJoined` received |
+| `RoomJoined { room, messages }` | `RoomJoined` received; `messages` is a `Vec<MessageRecord>` with up to 50 recent messages |
 | `RoomList { rooms }` | `RoomList` received |
 | `Pong` | `Pong` received |
 | `Error { message }` | `Error` packet or local failure |
+
+`MessageRecord` (re-exported from `hoy-protocol`) carries `from: String` and `text: String`.
 
 ---
 
@@ -108,6 +110,7 @@ Clients go through two phases on the server:
      - Client moved from pending → identified in `#general`
      - `Welcome { username, room: "general" }` sent to client
      - `SystemMessage: "{username} joined #general"` broadcast to existing room members (sender excluded)
+     - `RoomJoined { room: "general", messages: [...] }` sent to client (up to 50 most recent messages from `#general`)
 3. `Ping` is answered with `Pong` even before `Hello`
 
 ### Messaging
@@ -118,8 +121,8 @@ Clients go through two phases on the server:
 ### Rooms
 
 - `JoinRoom { room }` (name validated; created if new):
-  - `SystemMessage: "{username} left #old_room"` broadcast to old room (all members)
-  - `RoomJoined { room }` sent to client
+  - `SystemMessage: "{username} left #old_room"` broadcast to old room (all members) — skipped if the client is already in the target room
+  - `RoomJoined { room, messages }` sent to client; `messages` contains up to 50 most recent messages from the target room, oldest first
   - `SystemMessage: "{username} joined #new_room"` broadcast to new room (sender excluded)
 - `ListRooms` → `RoomList { rooms }` sent to client (alphabetically sorted)
 
