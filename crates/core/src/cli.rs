@@ -128,18 +128,15 @@ impl Hoy {
 #[cfg(test)]
 mod tests {
 
-    use std::{
-        fs,
-        net::{IpAddr, Ipv4Addr, SocketAddr},
-        path::PathBuf,
-    };
+    use std::fs;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::path::PathBuf;
 
-    use crate::{
-        cli::{Cli, DEFAULT_PORT, Hoy},
-        store::ServerStore,
-    };
     use clap::Parser;
     use hoy_test::assert_matches;
+
+    use crate::cli::{Cli, DEFAULT_PORT, Hoy};
+    use crate::store::ServerStore;
 
     const PORT: u16 = 1234;
     const PORT_STR: &str = "1234";
