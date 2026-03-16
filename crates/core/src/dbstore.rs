@@ -372,7 +372,7 @@ mod tests {
 
         let store2 = DbStore::new(Some(dir.path().join("hoy.db")))
             .await
-            .expect("Paralel failed");
+            .expect("Failed to open a new connection to db");
 
         let rooms = store2
             .load_rooms()
