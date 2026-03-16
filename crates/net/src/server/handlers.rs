@@ -15,6 +15,9 @@ use crate::error::StateError;
 use crate::server::client_id::ClientId;
 use crate::server::state::ServerState;
 
+/// Maximum number of messages to load from storage on sync.
+const MESSAGE_HISTORY_LIMIT: usize = 50;
+
 /// Clients that have connected but have not yet completed the `Hello` handshake.
 ///
 /// Keyed by [`ClientId`]; holds the outbound writer channel until the client
@@ -205,7 +208,7 @@ pub(crate) async fn handle_join_room(
                 .await;
             }
 
-            let load_result = store.load_recent_messages(&target, 50);
+            let load_result = store.load_recent_messages(&target, MESSAGE_HISTORY_LIMIT);
             let Ok(history) = load_result else {
                 eprintln!("Failed to load message history for {target}");
                 send_error(&tx, "Failed to load message history").await;

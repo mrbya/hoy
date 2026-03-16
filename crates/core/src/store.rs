@@ -169,3 +169,59 @@ pub trait ServerStore: Send + 'static {
         limit: usize,
     ) -> Result<Vec<StoredMessage>, StoreError>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::RoomName;
+    use crate::error::StoreError;
+
+    #[test]
+    fn room_name_empty_is_error() {
+        let err = RoomName::new("").expect_err("empty name should fail");
+        assert!(matches!(err, StoreError::InvalidRoomName(_)));
+    }
+
+    #[test]
+    fn room_name_too_long_is_error() {
+        let long = "a".repeat(65);
+        let err = RoomName::new(long).expect_err("65-char name should fail");
+        assert!(matches!(err, StoreError::InvalidRoomName(_)));
+    }
+
+    #[test]
+    fn room_name_invalid_char_uppercase_is_error() {
+        let err = RoomName::new("BadRoom").expect_err("uppercase should fail");
+        assert!(matches!(err, StoreError::InvalidRoomName(_)));
+    }
+
+    #[test]
+    fn room_name_invalid_char_space_is_error() {
+        let err = RoomName::new("bad room").expect_err("space should fail");
+        assert!(matches!(err, StoreError::InvalidRoomName(_)));
+    }
+
+    #[test]
+    fn room_name_invalid_char_exclamation_is_error() {
+        let err = RoomName::new("bad!").expect_err("exclamation should fail");
+        assert!(matches!(err, StoreError::InvalidRoomName(_)));
+    }
+
+    #[test]
+    fn room_name_valid_succeeds() {
+        let name = RoomName::new("my-room_01").expect("valid name should succeed");
+        assert_eq!(name.as_str(), "my-room_01");
+    }
+
+    #[test]
+    fn room_name_max_length_succeeds() {
+        let exactly_64 = "a".repeat(64);
+        let name = RoomName::new(exactly_64.clone()).expect("64-char name should succeed");
+        assert_eq!(name.as_str(), exactly_64);
+    }
+
+    #[test]
+    fn room_name_display() {
+        let name = RoomName::new("general").expect("valid name should succeed");
+        assert_eq!(format!("{name}"), "general");
+    }
+}

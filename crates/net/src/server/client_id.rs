@@ -27,3 +27,27 @@ impl Display for ClientId {
         write!(f, "client#{}", self.0)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::ClientId;
+
+    #[test]
+    fn client_id_get_returns_inner() {
+        let id = ClientId::new();
+        assert!(id.get() > 0);
+    }
+
+    #[test]
+    fn client_id_display() {
+        let id = ClientId::new();
+        assert_eq!(format!("{id}"), format!("client#{}", id.get()));
+    }
+
+    #[test]
+    fn client_id_sequential() {
+        let a = ClientId::new();
+        let b = ClientId::new();
+        assert_eq!(b.get(), a.get() + 1);
+    }
+}

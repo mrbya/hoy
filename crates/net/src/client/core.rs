@@ -894,6 +894,232 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn connect_while_awaiting_welcome_emits_error() -> Result<(), ()> {
+        let addr = SocketAddr::from(([127, 0, 0, 1], 5555));
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let (internal_tx, _internal_rx) = mpsc::channel(8);
+        let mut state = ClientState::AwaitingWelcome {
+            server_addr: addr,
+            username: String::from("alice"),
+            session: dummy_session(),
+        };
+
+        let command = ClientCommand::Connect {
+            server_addr: addr,
+            username: String::from("bob"),
+        };
+        let spawner = |_addr: SocketAddr, _internal: mpsc::Sender<InternalEvent>| async {
+            Ok::<SessionHandle, NetError>(dummy_session())
+        };
+
+        let should_continue = async_ok!(
+            200,
+            handle_command_with_spawner(&mut state, command, &event_tx, &internal_tx, spawner)
+        );
+        assert!(should_continue);
+
+        let event = recv_event(&mut event_rx).await.ok_or(())?;
+        assert!(matches!(event, ClientEvent::Error { .. }));
+        assert!(state.is_awaiting_welcome());
+        shutdown_state(&mut state).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn connect_session_spawn_error_emits_error() -> Result<(), ()> {
+        let addr = SocketAddr::from(([127, 0, 0, 1], 5555));
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let (internal_tx, _internal_rx) = mpsc::channel(8);
+        let mut state = ClientState::default();
+
+        let command = ClientCommand::Connect {
+            server_addr: addr,
+            username: String::from("alice"),
+        };
+        let spawner = |_addr: SocketAddr, _internal: mpsc::Sender<InternalEvent>| async {
+            Err::<SessionHandle, NetError>(NetError::Io(std::io::Error::other("stub spawn fail")))
+        };
+
+        let should_continue = async_ok!(
+            200,
+            handle_command_with_spawner(&mut state, command, &event_tx, &internal_tx, spawner)
+        );
+        assert!(should_continue);
+
+        let first = recv_event(&mut event_rx).await.ok_or(())?;
+        assert!(matches!(first, ClientEvent::Connecting { .. }));
+        let second = recv_event(&mut event_rx).await.ok_or(())?;
+        assert!(matches!(second, ClientEvent::Error { .. }));
+        assert!(state.is_disconnected());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn disconnect_while_disconnected_is_no_op() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let (internal_tx, _internal_rx) = mpsc::channel(8);
+        let mut state = ClientState::default();
+
+        let should_continue = async_ok!(
+            200,
+            handle_command(
+                &mut state,
+                ClientCommand::Disconnect,
+                &event_tx,
+                &internal_tx
+            )
+        );
+        assert!(should_continue);
+        assert!(state.is_disconnected());
+        event_rx.try_recv().expect_err("no event should be emitted");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn shutdown_while_connected_emits_disconnected() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let (internal_tx, _internal_rx) = mpsc::channel(8);
+        let mut state = ClientState::Connected {
+            server_addr: SocketAddr::from(([127, 0, 0, 1], 1234)),
+            username: String::from("alice"),
+            room: String::from("#general"),
+            session: dummy_session(),
+        };
+
+        let should_continue = async_ok!(
+            200,
+            handle_command(&mut state, ClientCommand::Shutdown, &event_tx, &internal_tx)
+        );
+        assert!(!should_continue);
+
+        let event = recv_event(&mut event_rx).await.ok_or(())?;
+        assert!(matches!(event, ClientEvent::Disconnected));
+        assert!(state.is_disconnected());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn join_room_and_list_rooms_while_not_connected_emit_errors() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let (internal_tx, _internal_rx) = mpsc::channel(8);
+        let mut state = ClientState::default();
+
+        let join_should_continue = async_ok!(
+            200,
+            handle_command(
+                &mut state,
+                ClientCommand::JoinRoom {
+                    room: String::from("#general")
+                },
+                &event_tx,
+                &internal_tx
+            )
+        );
+        assert!(join_should_continue);
+
+        let list_should_continue = async_ok!(
+            200,
+            handle_command(
+                &mut state,
+                ClientCommand::ListRooms,
+                &event_tx,
+                &internal_tx
+            )
+        );
+        assert!(list_should_continue);
+
+        let first = recv_event(&mut event_rx).await.ok_or(())?;
+        assert!(matches!(first, ClientEvent::Error { .. }));
+        let second = recv_event(&mut event_rx).await.ok_or(())?;
+        assert!(matches!(second, ClientEvent::Error { .. }));
+        assert!(state.is_disconnected());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn connection_closed_while_disconnected_is_no_op() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let mut state = ClientState::default();
+
+        let should_continue = async_ok!(
+            200,
+            handle_internal_event(&mut state, InternalEvent::ConnectionClosed, &event_tx)
+        );
+        assert!(should_continue);
+        assert!(state.is_disconnected());
+        event_rx.try_recv().expect_err("no event should be emitted");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn connection_error_while_disconnected_is_no_op() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let mut state = ClientState::default();
+
+        let event = InternalEvent::ConnectionError {
+            message: String::from("some error"),
+        };
+        let should_continue = async_ok!(200, handle_internal_event(&mut state, event, &event_tx));
+        assert!(should_continue);
+        assert!(state.is_disconnected());
+        event_rx.try_recv().expect_err("no event should be emitted");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn welcome_in_wrong_state_emits_error() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let mut state = ClientState::default(); // Disconnected
+
+        let event = InternalEvent::PacketReceived(ServerPacket::Welcome {
+            username: String::from("alice"),
+            room: String::from("#general"),
+        });
+        let should_continue = async_ok!(200, handle_internal_event(&mut state, event, &event_tx));
+        assert!(should_continue);
+
+        let emitted = recv_event(&mut event_rx).await.ok_or(())?;
+        assert!(matches!(emitted, ClientEvent::Error { .. }));
+        assert!(state.is_disconnected());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn packets_while_disconnected_are_ignored() -> Result<(), ()> {
+        let (event_tx, mut event_rx) = mpsc::channel(8);
+        let packets = vec![
+            ServerPacket::ChatMessage {
+                from: String::from("a"),
+                room: String::from("r"),
+                text: String::from("t"),
+            },
+            ServerPacket::SystemMessage {
+                text: String::from("s"),
+            },
+            ServerPacket::Error {
+                message: String::from("e"),
+            },
+            ServerPacket::Pong,
+            ServerPacket::RoomJoined {
+                room: String::from("r"),
+                messages: vec![],
+            },
+            ServerPacket::RoomList { rooms: vec![] },
+        ];
+
+        for packet in packets {
+            let mut state = ClientState::default();
+            let event = InternalEvent::PacketReceived(packet);
+            let should_continue =
+                async_ok!(200, handle_internal_event(&mut state, event, &event_tx));
+            assert!(should_continue);
+        }
+
+        event_rx.try_recv().expect_err("no event should be emitted");
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn send_message_and_ping_while_disconnected_emit_errors() -> Result<(), ()> {
         let (event_tx, mut event_rx) = mpsc::channel(8);
         let (internal_tx, _internal_rx) = mpsc::channel(8);

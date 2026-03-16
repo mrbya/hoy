@@ -151,8 +151,9 @@ pub async fn run_server(
 mod tests {
     use std::collections::HashMap;
 
+    use hoy_core::error::StoreError;
     use hoy_core::memory::InMemoryStore;
-    use hoy_core::store::{RoomName, ServerStore};
+    use hoy_core::store::{RoomName, RoomRecord, ServerStore, StoredMessage};
     use hoy_protocol::packet::{ClientPacket, MessageRecord, ServerPacket};
     use hoy_test::async_ok;
     use tokio::sync::mpsc;
@@ -242,6 +243,66 @@ mod tests {
 
     fn default_room() -> RoomName {
         RoomName::new(DEFAULT_ROOM).expect("hardcoded room name is valid")
+    }
+
+    // ── StoreStub ─────────────────────────────────────────────────────────────
+
+    /// Thin wrapper around [`InMemoryStore`] that can be configured to fail on
+    /// specific operations, used to test error-handling paths in handlers.
+    struct StoreStub {
+        fail_ensure_room: bool,
+        fail_load_messages: bool,
+        inner: InMemoryStore,
+    }
+
+    impl StoreStub {
+        fn failing_ensure_room() -> Self {
+            let mut inner = InMemoryStore::new();
+            inner.ensure_room(&default_room()).expect("default room");
+            Self {
+                fail_ensure_room: true,
+                fail_load_messages: false,
+                inner,
+            }
+        }
+
+        fn failing_load_messages() -> Self {
+            let mut inner = InMemoryStore::new();
+            inner.ensure_room(&default_room()).expect("default room");
+            Self {
+                fail_ensure_room: false,
+                fail_load_messages: true,
+                inner,
+            }
+        }
+    }
+
+    impl ServerStore for StoreStub {
+        fn ensure_room(&mut self, name: &RoomName) -> Result<(), StoreError> {
+            if self.fail_ensure_room {
+                return Err(StoreError::Internal("stub: ensure_room failure".into()));
+            }
+            self.inner.ensure_room(name)
+        }
+
+        fn load_rooms(&self) -> Result<Vec<RoomRecord>, StoreError> {
+            self.inner.load_rooms()
+        }
+
+        fn append_message(&mut self, msg: StoredMessage) -> Result<(), StoreError> {
+            self.inner.append_message(msg)
+        }
+
+        fn load_recent_messages(
+            &self,
+            room: &RoomName,
+            limit: usize,
+        ) -> Result<Vec<StoredMessage>, StoreError> {
+            if self.fail_load_messages {
+                return Err(StoreError::Internal("stub: load_messages failure".into()));
+            }
+            self.inner.load_recent_messages(room, limit)
+        }
     }
 
     // ── Hello ─────────────────────────────────────────────────────────────────
@@ -607,6 +668,97 @@ mod tests {
 
         h.assert_no_packet(sender);
         assert!(h.recv(receiver).await.is_some());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn broadcast_to_room_unknown_room_is_no_op() -> Result<(), ()> {
+        let mut h = TestHarness::new();
+        let id = h.add_identified_client("alice");
+        let unknown_room = RoomName::new("no-such-room").expect("valid name");
+
+        async_ok!(
+            200,
+            broadcast_to_room(
+                &h.state,
+                &unknown_room,
+                &ServerPacket::SystemMessage {
+                    text: "ghost".into()
+                },
+                None,
+            )
+        );
+
+        h.assert_no_packet(id);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn hello_missing_pending_entry_is_no_op() -> Result<(), ()> {
+        let mut h = TestHarness::new();
+        let observer = h.add_identified_client("observer");
+        // A fresh ClientId that was never added to pending or state.
+        let unknown = ClientId::new();
+
+        async_ok!(
+            200,
+            handle_hello(
+                &mut h.state,
+                &mut h.store,
+                &mut h.pending,
+                unknown,
+                "ghost".into(),
+                &default_room()
+            )
+        );
+
+        h.assert_no_packet(observer);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn handle_join_room_store_ensure_fails_sends_error() -> Result<(), ()> {
+        let mut state = ServerState::default();
+        let general = default_room();
+        state.ensure_room(general.clone());
+
+        let (tx, mut rx) = mpsc::channel(8);
+        let id = ClientId::new();
+        state
+            .add_client(id, "alice".to_owned(), general, tx)
+            .expect("add_client failed");
+
+        let mut stub = StoreStub::failing_ensure_room();
+        async_ok!(
+            200,
+            handle_join_room(&mut state, &mut stub, id, "new-room".into())
+        );
+
+        let packet = async_ok!(200, rx.recv()).ok_or(())?;
+        assert!(matches!(packet, ServerPacket::Error { .. }));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn handle_join_room_store_load_fails_sends_error() -> Result<(), ()> {
+        let mut state = ServerState::default();
+        let general = default_room();
+        state.ensure_room(general.clone());
+
+        let (tx, mut rx) = mpsc::channel(8);
+        let id = ClientId::new();
+        state
+            .add_client(id, "alice".to_owned(), general, tx)
+            .expect("add_client failed");
+
+        let mut stub = StoreStub::failing_load_messages();
+        async_ok!(
+            200,
+            handle_join_room(&mut state, &mut stub, id, "new-room".into())
+        );
+
+        let packet = async_ok!(200, rx.recv()).ok_or(())?;
+        assert!(matches!(packet, ServerPacket::Error { .. }));
         Ok(())
     }
 }

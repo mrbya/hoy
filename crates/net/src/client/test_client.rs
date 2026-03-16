@@ -261,6 +261,7 @@ fn format_client_event(event: &ClientEvent) -> String {
 mod tests {
     use std::net::SocketAddr;
 
+    use hoy_protocol::packet::MessageRecord;
     use hoy_test::async_ok;
     use tokio::time::{Duration, timeout};
 
@@ -384,5 +385,102 @@ mod tests {
         );
 
         assert_eq!(format_client_event(&ClientEvent::Pong), "Pong!");
+    }
+
+    #[tokio::test]
+    async fn handle_input_line_empty_is_continue() -> Result<(), ()> {
+        let (handle, mut events) = spawn_handle();
+
+        let action =
+            async_ok!(200, handle_input_line(&handle, String::new())).map_err(|_err| ())?;
+        assert_eq!(action, FrontendAction::Continue);
+        assert!(recv_event_timeout(&mut events, 50).await.is_none());
+
+        async_ok!(200, handle.shutdown()).map_err(|_err| ())?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn handle_input_line_list_sends_list_rooms() -> Result<(), ()> {
+        let (handle, mut events) = spawn_handle();
+
+        let action =
+            async_ok!(200, handle_input_line(&handle, String::from("/list"))).map_err(|_err| ())?;
+        assert_eq!(action, FrontendAction::Continue);
+
+        // Client is not connected, so the core emits an Error event
+        let event = recv_event_timeout(&mut events, 200).await.ok_or(())?;
+        assert!(matches!(event, ClientEvent::Error { .. }));
+
+        async_ok!(200, handle.shutdown()).map_err(|_err| ())?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn handle_input_line_room_valid_sends_join_room() -> Result<(), ()> {
+        let (handle, mut events) = spawn_handle();
+
+        let action = async_ok!(
+            200,
+            handle_input_line(&handle, String::from("/room general"))
+        )
+        .map_err(|_err| ())?;
+        assert_eq!(action, FrontendAction::Continue);
+
+        // Client is not connected, so the core emits an Error event
+        let event = recv_event_timeout(&mut events, 200).await.ok_or(())?;
+        assert!(matches!(event, ClientEvent::Error { .. }));
+
+        async_ok!(200, handle.shutdown()).map_err(|_err| ())?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn handle_input_line_room_invalid_name_prints_error() -> Result<(), ()> {
+        let (handle, mut events) = spawn_handle();
+
+        // Invalid room name — error is printed locally, not forwarded to core
+        let action = async_ok!(
+            200,
+            handle_input_line(&handle, String::from("/room Bad Name!"))
+        )
+        .map_err(|_err| ())?;
+        assert_eq!(action, FrontendAction::Continue);
+        assert!(recv_event_timeout(&mut events, 50).await.is_none());
+
+        async_ok!(200, handle.shutdown()).map_err(|_err| ())?;
+        Ok(())
+    }
+
+    #[test]
+    fn format_client_event_room_joined_with_messages() {
+        let event = ClientEvent::RoomJoined {
+            room: String::from("general"),
+            messages: vec![MessageRecord {
+                from: String::from("alice"),
+                text: String::from("hi"),
+            }],
+        };
+        let formatted = format_client_event(&event);
+        assert!(
+            formatted.contains("joined #general"),
+            "expected join line, got: {formatted}"
+        );
+        assert!(
+            formatted.contains("alice: hi"),
+            "expected message line, got: {formatted}"
+        );
+    }
+
+    #[test]
+    fn format_client_event_room_list() {
+        let event = ClientEvent::RoomList {
+            rooms: vec![String::from("general")],
+        };
+        let formatted = format_client_event(&event);
+        assert!(
+            formatted.contains("general"),
+            "expected room name, got: {formatted}"
+        );
     }
 }

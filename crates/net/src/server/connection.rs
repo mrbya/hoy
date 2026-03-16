@@ -12,7 +12,7 @@ use crate::error::NetError;
 use crate::server::client_id::ClientId;
 use crate::server::command::ServerCommand;
 
-/// Incomming channel read buffer size.
+/// Incoming channel read buffer size.
 const READ_BUFFER_SIZE: usize = 1024;
 /// Outgoing channel size.
 const CLIENT_CHANNEL_SIZE: usize = 32;
@@ -176,4 +176,136 @@ where
 
     writer_task.abort();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+
+    use hoy_protocol::codec::encode_frame;
+    use hoy_protocol::packet::{ClientPacket, ServerPacket};
+    use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf};
+    use tokio::sync::mpsc;
+
+    use super::handle_connection_io;
+    use crate::error::NetError;
+    use crate::server::client_id::ClientId;
+    use crate::server::command::ServerCommand;
+
+    // ── Stubs ─────────────────────────────────────────────────────────────────
+
+    struct FailReader;
+
+    impl AsyncRead for FailReader {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _buf: &mut ReadBuf<'_>,
+        ) -> Poll<io::Result<()>> {
+            Poll::Ready(Err(io::Error::other("stub read fail")))
+        }
+    }
+
+    struct FailWriter;
+
+    impl AsyncWrite for FailWriter {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _buf: &[u8],
+        ) -> Poll<io::Result<usize>> {
+            Poll::Ready(Err(io::Error::other("stub write fail")))
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    // ── Tests ─────────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn connection_io_command_channel_closed_on_connect() {
+        let (server_tx, server_rx) = mpsc::channel::<ServerCommand>(4);
+        drop(server_rx); // no receiver → Connected send must fail
+
+        let (_, server_side) = tokio::io::duplex(1024);
+        let (server_reader, server_writer) = tokio::io::split(server_side);
+        let client_id = ClientId::new();
+
+        let result = handle_connection_io(server_reader, server_writer, client_id, server_tx).await;
+        assert!(matches!(result, Err(NetError::CommandChannelClosed)));
+    }
+
+    #[tokio::test]
+    async fn connection_io_command_channel_closed_on_packet() {
+        let (client_side, server_side) = tokio::io::duplex(4096);
+        let (server_reader, server_writer) = tokio::io::split(server_side);
+        let (_, mut client_writer) = tokio::io::split(client_side);
+
+        let (server_tx, mut server_rx) = mpsc::channel::<ServerCommand>(4);
+        let client_id = ClientId::new();
+
+        let task = tokio::spawn(async move {
+            handle_connection_io(server_reader, server_writer, client_id, server_tx).await
+        });
+
+        let _ = server_rx.recv().await; // consume Connected
+        drop(server_rx); // close the receiver so the next Packet send fails
+
+        // Write a valid packet — the task will decode it and fail to forward it
+        let frame = encode_frame(&ClientPacket::Ping).expect("encode Ping");
+        client_writer.write_all(&frame).await.expect("write frame");
+
+        let result = task.await.expect("task panicked");
+        assert!(matches!(result, Err(NetError::CommandChannelClosed)));
+    }
+
+    #[tokio::test]
+    async fn connection_io_read_error_propagates() {
+        let (server_tx, _server_rx) = mpsc::channel::<ServerCommand>(4);
+        let client_id = ClientId::new();
+
+        // FailReader returns an io::Error on the first read; sink() discards all writes
+        let result =
+            handle_connection_io(FailReader, tokio::io::sink(), client_id, server_tx).await;
+        assert!(matches!(result, Err(NetError::Io(_))));
+    }
+
+    #[tokio::test]
+    async fn connection_io_writer_error_propagates() -> Result<(), &'static str> {
+        let (client_side, server_side) = tokio::io::duplex(1024);
+        let (server_reader, _server_writer) = tokio::io::split(server_side);
+        let (_client_reader, _client_writer) = tokio::io::split(client_side);
+        // _client_writer is kept alive so server_reader does not hit EOF
+
+        let (server_tx, mut server_rx) = mpsc::channel::<ServerCommand>(4);
+        let client_id = ClientId::new();
+
+        tokio::spawn(async move {
+            drop(handle_connection_io(server_reader, FailWriter, client_id, server_tx).await);
+        });
+
+        let Some(ServerCommand::Connected { tx: client_tx, .. }) = server_rx.recv().await else {
+            return Err("expected Connected command");
+        };
+
+        // Trigger the writer task — FailWriter fails on write_all, the task exits and drops
+        // client_rx, making further sends fail.
+        drop(client_tx.send(ServerPacket::Pong).await);
+
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+        assert!(
+            client_tx.send(ServerPacket::Pong).await.is_err(),
+            "writer task should have exited and dropped client_rx"
+        );
+        Ok(())
+    }
 }
