@@ -75,16 +75,6 @@ pub(crate) async fn handle_hello(
             )
             .await;
 
-            broadcast_to_room(
-                state,
-                default_room,
-                &ServerPacket::SystemMessage {
-                    text: format!("{username} joined #{default_room}"),
-                },
-                Some(client_id),
-            )
-            .await;
-
             handle_join_room(state, store, client_id, default_room.to_string()).await;
         }
 

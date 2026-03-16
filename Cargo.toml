@@ -8,7 +8,7 @@ members = [
 ]
 
 [workspace.dependencies]
-hoy-core = { version = "0.1.0", path = "crates/core" }
+hoy-core = { version = "0.1.0", path = "crates/core", features = ["dbstore"] }
 hoy-net = { version = "0.2.0", path = "crates/net"}
 hoy-protocol = { version = "0.2.0", path = "crates/protocol"}
 hoy-tui = { version = "0.0.1-pre1", path = "crates/tui" }
@@ -17,6 +17,8 @@ thiserror = "2.0.18"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
+directories = "6"
 
 [workspace.package]
 authors = ["mrbya <v.toth.svk2@gmail.com>"]
@@ -60,7 +62,7 @@ hoy-net.workspace = true
 hoy-protocol.workspace = true
 hoy-tui.workspace = true
 thiserror.workspace = true
-serde_json = "1.0.149"
+serde_json.workspace = true
 clap = { version = "4", features = ["derive"] }
 
 [dev-dependencies]

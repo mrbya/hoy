@@ -13,8 +13,13 @@ categories.workspace = true
 
 description = "Hoy real-time chat core crate"
 
+[features]
+dbstore = ["dep:sqlx"]
+
 [dependencies]
 thiserror.workspace = true
+directories.workspace = true
+sqlx = { workspace = true, optional = true }
 
 [dev-dependencies]
 criterion = "0.8"

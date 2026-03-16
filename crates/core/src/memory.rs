@@ -13,7 +13,7 @@ use crate::store::{RoomName, RoomRecord, ServerStore, StoredMessage};
  *
  * async fn foo() {
  *     let mut store = InMemoryStore::new();
- *     let general = RoomName::new("general").unwrap();
+ *     let general = RoomName::new("general").expect("Hardcoded room name is valid");
  *     store.ensure_room(&general).await.unwrap();
  *     let rooms = store.load_rooms().await.unwrap();
  *     assert_eq!(rooms.len(), 1);
