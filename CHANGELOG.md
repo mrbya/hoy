@@ -36,6 +36,9 @@ All notable changes to this project will be documented in this file.
 - `src/lib.rs` added: `run_hoy(hoy: Hoy, store: impl ServerStore)` — orchestrates server or client mode; enables integration testing of the full binary logic without spawning a subprocess.
 - `src/main.rs` slimmed to three lines: parse CLI via `Hoy::default()`, open store, delegate to `run_hoy`.
 
+#### Binary (`hoy-incognito`)
+- added `hoy-incognito` binary running with `InMemoryStore` storage.
+
 #### Testing
 
 - `DbStore` unit tests (behind `dbstore` feature + `tempfile` dev-dependency):
