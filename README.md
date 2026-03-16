@@ -16,6 +16,7 @@ A TUI real time messaging app inspired by accord.
   * [Starting the server](#starting-the-server)
   * [Connecting a client](#connecting-a-client)
   * [Chat commands](#chat-commands)
+  * [Incognito](#incognito)
 - [Crates](#crates)
 - [Protocol](#protocol)
   * [Frame format](#frame-format)
@@ -98,6 +99,11 @@ room.
 Valid room name:
 - Allowed characters: lowercase ASCII letters, Ascii digits, `_`, `-`
 - Length: 1-64 characters.
+
+### Incognito
+
+Provides an alternative binary `hoy-incognito` for a server that runs with
+a temporary in-memory storage instead of a persistent storage database.
 
 ## Crates
 

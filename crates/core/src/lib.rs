@@ -64,6 +64,8 @@
 )]
 
 #[cfg(feature = "dbstore")]
+/// Hoy command-line interface.
+pub mod cli;
 /// SQLite-backed `ServerStore` implementation.
 pub mod dbstore;
 /// hoy-core error types.

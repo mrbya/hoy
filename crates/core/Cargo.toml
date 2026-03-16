@@ -18,6 +18,7 @@ dbstore = ["dep:sqlx"]
 
 [dependencies]
 thiserror.workspace = true
+clap.workspace = true
 directories.workspace = true
 sqlx = { workspace = true, optional = true }
 

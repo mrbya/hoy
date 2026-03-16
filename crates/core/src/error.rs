@@ -25,3 +25,11 @@ pub enum StoreError {
     #[error("Io error: {0}")]
     Io(#[from] std::io::Error),
 }
+
+/// Cli errors.
+#[derive(Debug, Error)]
+pub enum HoyError {
+    /// No username provided to cli when running client.
+    #[error("No client username provided.")]
+    NoUsername,
+}
