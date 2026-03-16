@@ -19,17 +19,21 @@ Shared domain logic and persistent storage abstractions for the hoy app.
   * [`InMemoryStore`](#inmemorystore)
 - [`dbstore` module](#dbstore-module)
   * [`DbStore`](#dbstore)
+- [`cli` module](#cli-module)
+  * [`Hoy`](#hoy)
 - [`error` module](#error-module)
   * [`StoreError`](#storeerror)
+  * [`HoyError`](#hoyerror)
 
 <!-- tocstop -->
 
 ## Lib modules
 
-- `error`: `StoreError`
+- `error`: `StoreError`, `HoyError`
 - `store`: `RoomName`, `RoomRecord`, `StoredMessage`, `ServerStore`
 - `memory`: `InMemoryStore` — in-memory `ServerStore` implementation (always available)
-- `dbstore`: `DbStore` — SQLite-backed `ServerStore` implementation (requires `dbstore` feature)
+- `dbstore`: `DbStore` — SQLite-backed `ServerStore` implementation
+- `cli` *(requires `dbstore` feature)*: `Hoy` — CLI argument parsing and application entry-point helpers
 
 ---
 
@@ -37,7 +41,7 @@ Shared domain logic and persistent storage abstractions for the hoy app.
 
 | Feature | Description |
 |---|---|
-| `dbstore` | Enables `DbStore`, a SQLite-backed `ServerStore`. Pulls in `sqlx` and `directories`. |
+| `dbstore` | Enables `DbStore` (SQLite-backed store) and the `cli` module. Pulls in `sqlx`. |
 
 ---
 
@@ -60,7 +64,7 @@ let _    = RoomName::new("Bad Room!");    // Err — uppercase, space, '!'
 |---|---|
 | `RoomName::GENERAL` | `"general"` — the default room every client joins on connect |
 | `RoomName::new(s)` | Construct and validate; returns `Err(StoreError::InvalidRoomName)` on failure |
-| `RoomName::general()` | Convenience constructor for the `"general"` room |
+| `RoomName::general()` | Convenience constructor for the `"general"` room (panics only on internal logic errors) |
 | `as_str()` | Borrow the inner string slice |
 | `into_string()` | Consume into the inner `String` |
 | `Display` | Formats as the plain room name string |
@@ -89,7 +93,7 @@ A single persisted chat message:
 
 The persistence interface for durable server data — room definitions and message history. Live connection state (connected clients, active memberships, writer channels) is **not** managed here; that belongs to the network layer.
 
-All methods, except `storage_slug`, are async and return `impl Future + Send`, making the trait safe to use across tokio task boundaries.
+All methods except `storage_slug` are async, expressed as RPIT (`fn method() -> impl Future<Output = …> + Send`) for `Send`-safe use across tokio tasks.
 
 ```rust
 pub trait ServerStore: Send + 'static {
@@ -111,6 +115,7 @@ pub trait ServerStore: Send + 'static {
 | `load_rooms()` | Return all persisted rooms |
 | `append_message(msg)` | Append a message to a room's history; errors if the room does not exist |
 | `load_recent_messages(room, limit)` | Return up to `limit` most recent messages, oldest first; errors if the room does not exist |
+| `storage_slug()` | Return a short human-readable label for the store type (used in the server start-up banner) |
 
 ---
 
@@ -139,8 +144,6 @@ assert_eq!(rooms.len(), 1);
 
 ## `dbstore` module
 
-Requires the `dbstore` feature flag.
-
 ### `DbStore`
 
 A SQLite-backed `ServerStore` that persists room definitions and message history across server restarts. Uses `sqlx` with a connection pool and applies schema migrations automatically on construction.
@@ -149,11 +152,11 @@ A SQLite-backed `ServerStore` that persists room definitions and message history
 use hoy_core::dbstore::DbStore;
 use hoy_core::store::{RoomName, ServerStore};
 
-// Pass None to use the platform data directory (e.g. ~/.local/share/hoy/hoy.db)
+// Pass None to use the platform data directory (e.g. ~/.local/share/hoy/hoy.db on Linux)
 let store = DbStore::new(None).await?;
 
-// Or supply an explicit directory path
-let store = DbStore::new(Some("/var/lib/hoy".into())).await?;
+// Or supply an explicit path to the database file
+let store = DbStore::new(Some("/var/lib/hoy/hoy.db".into())).await?;
 
 let general = RoomName::new("general")?;
 let messages = store.load_recent_messages(&general, 50).await?;
@@ -161,7 +164,8 @@ let messages = store.load_recent_messages(&general, 50).await?;
 
 | Method | Description |
 |---|---|
-| `DbStore::new(path)` | Open (or create) the database at `path/hoy.db`; runs pending migrations. Pass `None` to resolve the path via the platform data directory. |
+| `DbStore::new(path)` | Open (or create) the database at `path`; runs pending migrations. Pass `None` to resolve the path via the platform data directory. |
+| `DbStore::close()` | Explicitly close the underlying connection pool. |
 | `fetch_room_id(room)` | Look up the internal row ID for a room name; returns `None` if the room does not exist. |
 
 **Storage location** (when `path` is `None`):
@@ -176,6 +180,58 @@ let messages = store.load_recent_messages(&general, 50).await?;
 
 ---
 
+## `cli` module
+
+*Requires the `dbstore` feature.*
+
+Provides CLI argument parsing and application bootstrap helpers, so the binary entry point stays thin.
+
+### `Hoy`
+
+The top-level application handle. Constructed by parsing CLI arguments with `clap` via `Hoy::default()`.
+
+```rust
+use hoy_core::cli::Hoy;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let hoy = Hoy::default(); // parses std::env::args()
+
+    let addr = hoy.resolve_address();
+
+    if hoy.run_server() {
+        let store = hoy.construct_store().await?;
+        // run_server(addr, store).await?;
+    } else {
+        let username = hoy.resolve_username()?;
+        // run_test_client(addr, username).await?;
+    }
+
+    Ok(())
+}
+```
+
+| Method | Return type | Description |
+|---|---|---|
+| `Hoy::default()` | `Hoy` | Parse CLI args from `std::env::args()` via `clap` |
+| `resolve_address()` | `SocketAddr` | Server address from `--address` / `--port`; defaults to `127.0.0.1:7777` |
+| `construct_store()` | `Result<DbStore, StoreError>` | Open (or create) the SQLite store; uses `--db` path or platform default |
+| `incognito_store()` | `InMemoryStore` | Return a fresh in-memory store (no persistence) |
+| `run_server()` | `bool` | `true` if `-s/--server` flag was passed |
+| `resolve_username()` | `Result<String, HoyError>` | Extract `--username`; returns `HoyError::NoUsername` if absent |
+
+**CLI flags**:
+
+| Flag | Short | Default | Description |
+|---|---|---|---|
+| `--server` | `-s` | `false` | Run in server mode |
+| `--port` | `-p` | `7777` | Port to bind or connect to |
+| `--address` | `-a` | `127.0.0.1` | Server IPv4 address |
+| `--username` | `-u` | — | Client username (required in client mode) |
+| `--db` | `-d` | platform default | Path to the SQLite database file |
+
+---
+
 ## `error` module
 
 ### `StoreError`
@@ -187,3 +243,9 @@ let messages = store.load_recent_messages(&general, 50).await?;
 | `Internal(String)` | Generic internal store failure (e.g. database query error) |
 | `NoDataDirectory` | The platform data directory could not be resolved (`DbStore::new(None)`) |
 | `Io(std::io::Error)` | I/O error while creating or accessing the storage directory |
+
+### `HoyError`
+
+| Variant | When |
+|---|---|
+| `NoUsername` | `Hoy::resolve_username()` called but `--username` was not provided on the CLI |
