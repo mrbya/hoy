@@ -62,6 +62,17 @@ impl RoomName {
         Ok(Self(s))
     }
 
+    /**
+     * Returns `general` room name.
+     *
+     * # Panics
+     * No panic expected as the default, hard-coded room name is valid.
+     */
+    #[must_use]
+    pub fn general() -> Self {
+        Self::new(Self::GENERAL).expect("Hardcoded default room name is valid")
+    }
+
     /// Returns the room nae as a string slice.
     #[must_use]
     pub fn as_str(&self) -> &str {

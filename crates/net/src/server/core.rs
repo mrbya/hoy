@@ -21,8 +21,6 @@ use crate::server::handlers::{
 };
 use crate::server::state::ServerState;
 
-/// Default room every client is placed in after Hello handshake.
-const DEFAULT_ROOM: &str = RoomName::GENERAL;
 /// Size of the server command channel.
 const SERVER_COMMAND_CHANNEL_SIZE: usize = 128;
 
@@ -109,9 +107,6 @@ async fn handle_server_command(
  * Returns `NetError` if:
  * - the listening socket cannot be created,
  * - persisted rooms cannot be loaded from the store.
- *
- * # Panics
- * No panic expected as the default, hard-coded room name is valid.
  */
 pub async fn run_server(
     bind_addr: SocketAddr,
@@ -134,7 +129,7 @@ pub async fn run_server(
         Err(e) => return Err(NetError::InternalServerError(StateError::StoreError(e))),
     }
 
-    let default_room = RoomName::new(DEFAULT_ROOM).expect("Hardcoded default room name is valid");
+    let default_room = RoomName::general();
     if let Err(e) = store.ensure_room(&default_room).await {
         return Err(NetError::InternalServerError(StateError::StoreError(e)));
     }
@@ -160,12 +155,15 @@ mod tests {
 
     use crate::server::client_id::ClientId;
     use crate::server::command::ServerCommand;
-    use crate::server::core::{DEFAULT_ROOM, handle_server_command};
+    use crate::server::core::handle_server_command;
     use crate::server::handlers::{
         PendingClients, broadcast_to_room, handle_hello, handle_join_room, handle_list_rooms,
         handle_send_message,
     };
     use crate::server::state::ServerState;
+
+    /// Default room every client is placed in after Hello handshake.
+    const DEFAULT_ROOM: &str = RoomName::GENERAL;
 
     // ── Harness ───────────────────────────────────────────────────────────────
 
@@ -339,8 +337,8 @@ mod tests {
         assert_eq!(username, "alice");
         assert_eq!(room, DEFAULT_ROOM);
 
-        // handle_hello broadcasts the join, then calls handle_join_room internally.
-        // The observer therefore receives two SystemMessages: one from each.
+        // handle_hello calls handle_join_room internally, which broadcasts the join
+        // once to all room members except the joiner.
         let ServerPacket::SystemMessage { text } = h.recv(observer).await.ok_or(())? else {
             return Err(());
         };
@@ -358,18 +356,6 @@ mod tests {
         assert!(
             messages.is_empty(),
             "no message history expected on first join"
-        );
-
-        // Second join broadcast from handle_join_room reaches the observer.
-        let ServerPacket::SystemMessage {
-            text: second_join_text,
-        } = h.recv(observer).await.ok_or(())?
-        else {
-            return Err(());
-        };
-        assert!(
-            second_join_text.contains("alice"),
-            "second join message should mention alice"
         );
 
         // The joiner must not receive the join broadcast about themselves.

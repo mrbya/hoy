@@ -87,7 +87,7 @@ mod tests {
     use crate::store::{RoomName, ServerStore, StoredMessage};
 
     fn general() -> RoomName {
-        RoomName::new("general").expect("hardcoded name is valid")
+        RoomName::general()
     }
 
     fn username1() -> String {
