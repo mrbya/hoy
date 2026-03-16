@@ -64,7 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         address = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST), args.port);
     }
 
-    let store = DbStore::new(None).await?;
+    let store = DbStore::new(args.db).await?;
 
     if args.server {
         run_server(address, store).await?;
