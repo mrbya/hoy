@@ -30,7 +30,7 @@ Shared domain logic and persistent storage abstractions for the hoy app.
 
 - `error`: `StoreError`, `HoyError`
 - `store`: `RoomName`, `RoomRecord`, `StoredMessage`, `ServerStore`
-- `memory`: `InMemoryStore` — in-memory `ServerStore` implementation (always available)
+- `memory`: `InMemoryStore` — in-memory `ServerStore` implementation
 - `dbstore`: `DbStore` — SQLite-backed `ServerStore` implementation
 - `cli`: `Hoy` — CLI argument parsing and application entry-point helpers
 
@@ -177,23 +177,27 @@ Provides CLI argument parsing and application bootstrap helpers, so the binary e
 
 ### `Hoy`
 
-The top-level application handle. Constructed by parsing CLI arguments with `clap` via `Hoy::default()`.
+The top-level application handle. Constructed by parsing CLI arguments with `clap`.
 
 ```rust
 use hoy_core::cli::Hoy;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let hoy = Hoy::default(); // parses std::env::args()
+    let hoy = Hoy::new()?; // parses and validates std::env::args()
 
     let addr = hoy.resolve_address();
 
     if hoy.run_server() {
-        let store = hoy.construct_store().await?;
-        // run_server(addr, store).await?;
+        let store = if hoy.run_incognito() {
+            // run_server(addr, Hoy::incognito_store()).await?;
+        } else {
+            let store = hoy.construct_store().await?;
+            // run_server(addr, store).await?;
+        };
     } else {
         let username = hoy.resolve_username()?;
-        // run_test_client(addr, username).await?;
+        // run_client(addr, username, hoy.run_tui()).await?;
     }
 
     Ok(())
@@ -203,10 +207,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | Method | Return type | Description |
 |---|---|---|
 | `Hoy::default()` | `Hoy` | Parse CLI args from `std::env::args()` via `clap` |
+| `Hoy::new()` | `Result<Hoy, HoyError>` | Parse and validate CLI args; returns `Err` if rules are violated |
+| `validate_args()` | `Result<(), HoyError>` | Check arg combinations; prints warnings for ignored args |
 | `resolve_address()` | `SocketAddr` | Server address from `--address` / `--port`; defaults to `127.0.0.1:7777` |
 | `construct_store()` | `Result<DbStore, StoreError>` | Open (or create) the SQLite store; uses `--db` path or platform default |
 | `incognito_store()` | `InMemoryStore` | Return a fresh in-memory store (no persistence) |
 | `run_server()` | `bool` | `true` if `-s/--server` flag was passed |
+| `run_incognito()` | `bool` | `true` if `-i/--incognito` flag was passed |
+| `run_tui()` | `bool` | `true` unless `-n/--no-tui` flag was passed |
 | `resolve_username()` | `Result<String, HoyError>` | Extract `--username`; returns `HoyError::NoUsername` if absent |
 
 **CLI flags**:
@@ -218,6 +226,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `--address` | `-a` | `127.0.0.1` | Server IPv4 address |
 | `--username` | `-u` | — | Client username (required in client mode) |
 | `--db` | `-d` | platform default | Path to the SQLite database file |
+| `--incognito` | `-i` | `false` | Run server with temporary in-memory storage (no persistence) |
+| `--no-tui` | `-n` | `false` | Run client with stdout UI instead of TUI |
 
 ---
 
@@ -237,4 +247,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 | Variant | When |
 |---|---|
-| `NoUsername` | `Hoy::resolve_username()` called but `--username` was not provided on the CLI |
+| `NoUsername` | `Hoy::new()` or `Hoy::resolve_username()` — running in client mode with no `--username` provided |

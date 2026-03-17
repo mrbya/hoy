@@ -47,6 +47,8 @@ Options:
   -a, --address <IPV4>       Server address to connect to. [default: localhost]
   -u, --username <USERNAME>  Client username (required in client mode)
   -d, --db <FILE>            Path to storage db file [default: ~/.local/share/hoy/hoy.db]
+  -i, --incognito            Run server with a temporary storage instead of a persistent db storage
+  -n, --no-tui               Run client with a simple stdout UI instead of TUI
   -h, --help                 Print help
   -V, --version              Print version
 ```
@@ -99,11 +101,6 @@ room.
 Valid room name:
 - Allowed characters: lowercase ASCII letters, Ascii digits, `_`, `-`
 - Length: 1-64 characters.
-
-### Incognito
-
-Provides an alternative binary `hoy-incognito` for a server that runs with
-a temporary in-memory storage instead of a persistent storage database.
 
 ## Crates
 
