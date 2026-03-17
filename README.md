@@ -16,7 +16,6 @@ A TUI real time messaging app inspired by accord.
   * [Starting the server](#starting-the-server)
   * [Connecting a client](#connecting-a-client)
   * [Chat commands](#chat-commands)
-  * [Incognito](#incognito)
 - [Crates](#crates)
 - [Protocol](#protocol)
   * [Frame format](#frame-format)

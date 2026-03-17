@@ -1,6 +1,6 @@
 //! TUI input event types and key mapping.
 //!
-//! [`AppEvent`] abstracts over raw crossterm key events so `app.rs` does not
+//! [`AppEvent`](crate::event::AppEvent) abstracts over raw crossterm key events so `app.rs` does not
 //! need to match on key codes directly.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -10,11 +10,11 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 pub enum AppEvent {
     /// User requested to quit.
     Quit,
-    /// User confirmed input <Ret>.
+    /// User confirmed input (Ret).
     Submit,
-    /// <Backspace>.
+    /// (Backspace).
     DeleteCharBack,
-    /// <Delete>.
+    /// (Delete).
     DeleteCharForward,
     /// Insert a character at the cursor position.
     InsertChar(char),
@@ -22,9 +22,9 @@ pub enum AppEvent {
     MoveCursorLeft,
     /// Move cursor one char right.
     MoveCursorRight,
-    /// <Home>.
+    /// (Home).
     MoveCursorStart,
-    /// <End>.
+    /// (End).
     MoveCursorEnd,
     /// Move cursor up one line.
     ScrollUp,

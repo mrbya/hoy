@@ -1,8 +1,8 @@
 //! TUI display state.
 //!
-//! [`TuiState`] is the single source of truth for everything the renderer needs.
+//! [`TuiState`](crate::state::TuiState) is the single source of truth for everything the renderer needs.
 //! It is owned exclusively by the app loop and mutated by translating
-//! [`ClientEvent`]s — no async concerns here.
+//! [`ClientEvent`](hoy_net::client::event::ClientEvent) — no async concerns here.
 
 use std::collections::HashMap;
 use std::net::SocketAddr;

@@ -124,6 +124,7 @@ async fn run_loop(
 ) -> Result<(), TuiError> {
     let mut state = TuiState::default();
     let mut term_events = EventStream::new();
+    client.list_rooms().await?;
 
     loop {
         terminal.draw(|f| ui::draw(f, &state))?;
@@ -294,6 +295,8 @@ async fn dispatch_input(
         client.ping().await?;
     } else if input == "/quit" || input == "/exit" {
         client.shutdown().await?;
+    } else if input == "/disconnect" {
+        client.disconnect().await?;
     } else if input.starts_with('/') {
         state.notification = Some(format!("Unknown command: {input}"));
     } else {

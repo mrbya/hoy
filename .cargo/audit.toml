@@ -3,7 +3,9 @@ ignore = [
     # Non-utf8 String can be created with `TimeBuf::as_str`
     "RUSTSEC-2025-0140",
     # Marvin attack can be ignored as there's no auth in hoy yet
-    "RUSTSEC-2023-0071"
+    "RUSTSEC-2023-0071",
+    # Ignoring until ratatui updates it's `time` crate dependency
+    "RUSTSEC-2026-0009",
 ]
 
 [output]

@@ -1,7 +1,7 @@
 //! Terminal rendering.
 //!
-//! [`draw`] is the single entry point called every frame. It is a pure
-//! function: given a [`Frame`] and the current [`TuiState`] it produces
+//! [`draw`](crate::ui::draw) is the single entry point called every frame. It is a pure
+//! function: given a [`Frame`](ratatui::Frame) and the current [`TuiState`](crate::state::TuiState) it produces
 //! output and nothing else.
 
 use ratatui::Frame;
@@ -68,9 +68,9 @@ fn draw_status_bar(frame: &mut Frame<'_>, state: &TuiState, area: Rect) {
         ConnectionStatus::Disconnected => (Style::default().fg(Color::Red), "disconnected"),
     };
 
-    let identity = match (&state.username, &state.current_room) {
+    let identity = match (state.username.as_deref(), state.current_room.as_deref()) {
         (Some(u), Some(r)) => format!("{u} @ #{r}"),
-        (Some(u), None) => u.clone(),
+        (Some(u), None) => u.to_owned(),
         _ => String::from("..."),
     };
 
@@ -217,8 +217,8 @@ fn draw_messages(frame: &mut Frame<'_>, state: &TuiState, area: Rect) {
 
 /// Converts one [`ChatMessage`] to a ratatui [`Line`].
 fn render_message(msg: &ChatMessage) -> Line<'_> {
-    match msg {
-        ChatMessage::User { from, text } => Line::from(vec![
+    match *msg {
+        ChatMessage::User { ref from, ref text } => Line::from(vec![
             Span::styled(
                 format!("{from}: "),
                 Style::default().add_modifier(Modifier::BOLD),
@@ -226,7 +226,7 @@ fn render_message(msg: &ChatMessage) -> Line<'_> {
             Span::raw(text.as_str()),
         ]),
 
-        ChatMessage::System { text } => Line::from(Span::styled(
+        ChatMessage::System { ref text } => Line::from(Span::styled(
             format!("* {text}"),
             Style::default().fg(Color::DarkGray),
         )),

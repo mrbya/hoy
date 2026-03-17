@@ -87,6 +87,7 @@ index:
     markdown-toc -i ./crates/core/README.md
     markdown-toc -i ./crates/net/README.md
     markdown-toc -i ./crates/protocol/README.md
+    markdown-toc -i ./crates/tui/README.md
 
 # Runs all checks necessary before commit.
 # Checks formating, code quality, tests, documentation, spellcheck and more.
