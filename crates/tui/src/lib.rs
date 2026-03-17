@@ -65,7 +65,11 @@
 
 /// App loop module.
 pub mod app;
-/// TUI event loop module.
+/// TUI error types.
+pub mod error;
+/// TUI input event types and key mapping.
 pub mod event;
-/// GUI module.
+/// TUI display state.
+pub mod state;
+/// Rendering.
 pub mod ui;

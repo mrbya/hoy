@@ -47,6 +47,14 @@ struct Cli {
     /// Path to storage db file [default: ~/.local/share/hoy/hoy.db]
     #[arg(short = 'd', long = "db", value_name = "FILE")]
     db: Option<PathBuf>,
+
+    /// Run server with a temporary storage instead of a persistent db storage
+    #[arg(short = 'i', long = "incognito", default_value_t = false)]
+    incognito: bool,
+
+    /// Run client with a simple stdout UI instead of TUI.
+    #[arg(short = 'n', long = "no-tui", default_value_t = false)]
+    notui: bool,
 }
 
 /// Hoy executable core.
@@ -63,6 +71,63 @@ impl Default for Hoy {
 }
 
 impl Hoy {
+    /**
+     * Constructs hoy CLI and parses + validates provided CLI args.
+     *
+     * # Returns
+     * `Ok(Hoy)` on success.
+     *
+     * # Errors
+     * Returns [`HoyError`] if arg validation fails.
+     */
+    pub fn new() -> Result<Self, HoyError> {
+        let hoy = Self::default();
+        hoy.validate_args()?;
+        Ok(hoy)
+    }
+
+    /**
+     * Validates provided args.
+     *
+     * Prints warning for invalid arg combinations (e.g. providing username when running client).
+     *
+     * # Returns
+     * `Ok(())` if arg rules are not violated.
+     *
+     * # Errors
+     * Returns [`HoyError::NoUsername`] if running client with no username provided.
+     */
+    pub fn validate_args(&self) -> Result<(), HoyError> {
+        let args = &self.args;
+        if args.server {
+            if args.username.is_some() {
+                eprintln!(
+                    "`-u/--username` provided even though running server. Ignoring argument."
+                );
+            }
+
+            if args.notui {
+                eprintln!("`-n/--no-tui` provided even though running server. Ignoring argument.");
+            }
+        } else {
+            if args.username.is_none() {
+                return Err(HoyError::NoUsername);
+            }
+
+            if args.db.is_some() {
+                eprintln!("`-d/--db` provided even though running client. Ignoring argument.");
+            }
+
+            if args.incognito {
+                eprintln!(
+                    "`-i/--incognito` provided even though running client. Ignoring argument."
+                );
+            }
+        }
+
+        Ok(())
+    }
+
     /**
      * Resolves server address to run or for a client to connect to.
      */
@@ -108,6 +173,22 @@ impl Hoy {
     }
 
     /**
+     * Returns true if `-i/--incognito` flag was provided.
+     */
+    #[must_use]
+    pub const fn run_incognito(&self) -> bool {
+        self.args.incognito
+    }
+
+    /**
+     * Returns true if `-n/--no-tu` flag was provided.
+     */
+    #[must_use]
+    pub const fn run_tui(&self) -> bool {
+        !self.args.notui
+    }
+
+    /**
      * Resolves client username.
      *
      * # Returns
@@ -145,8 +226,8 @@ mod tests {
     const USERNAME: &str = "bruce_lee";
     const DB: &str = "/tmp/a.db";
 
-    const ARGS: [&str; 10] = [
-        "hoy", "-s", "-p", PORT_STR, "-a", ADDR_STR, "-u", USERNAME, "-d", DB,
+    const ARGS: [&str; 12] = [
+        "hoy", "-s", "-p", PORT_STR, "-a", ADDR_STR, "-u", USERNAME, "-d", DB, "-i", "-n",
     ];
 
     fn hoy() -> (Hoy, Hoy) {
@@ -173,6 +254,8 @@ mod tests {
         assert!(args.ipv4.is_none());
         assert!(args.username.is_none());
         assert!(args.db.is_none());
+        assert!(!args.incognito);
+        assert!(!args.notui);
     }
 
     #[test]
@@ -189,6 +272,15 @@ mod tests {
                 .expect("Failed to convert db path"),
             DB
         );
+        assert!(args.incognito);
+        assert!(args.notui);
+    }
+
+    #[test]
+    fn hoy_validate_args() {
+        let (hoy, default) = hoy();
+        assert_matches!(hoy.validate_args(), Ok(()));
+        assert!(default.validate_args().is_err());
     }
 
     #[test]

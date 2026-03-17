@@ -23,11 +23,7 @@ test *FLAGS:
 
 # Build and run.
 run *FLAGS:
-    cargo run --bin hoy {{FLAGS}}
-
-# Build and run hoy-incognito bin.
-run-i *FLAGS:
-    cargo run --bin hoy-incognito {{FLAGS}}
+    cargo run {{FLAGS}}
 
 # Build release
 build *FLAGS:
