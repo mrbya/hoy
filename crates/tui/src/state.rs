@@ -68,6 +68,8 @@ pub struct TuiState {
     pub notification: Option<String>,
     /// Per-room scroll offset: number of messages scrolled up from the bottom
     pub scroll: HashMap<String, usize>,
+    /// Messages widget visible heigth.
+    pub messages_view_height: u16,
 }
 
 impl TuiState {
@@ -191,6 +193,23 @@ impl TuiState {
     }
 
     /**
+     * Recalculates layout-derived dimensions from the current terminal height.
+     *
+     * Must be called once per frame before drawing so that scroll capping
+     * reflects the actual viewport. The layout is:
+     * - 1 row  — status bar
+     * - N rows — main area (terminal_rows - 4)
+     * - 3 rows — input bar (including border)
+     * - 2 rows — message view borders
+     *
+     * # Arguments
+     * - `terminal_rows`: current terminal height in rows.
+     */
+    pub fn update_message_view_height(&mut self, rows: u16) {
+        self.messages_view_height = rows.saturating_sub(6);
+    }
+
+    /**
      * Scrolls the current room up by one message.
      */
     pub fn scroll_up(&mut self) {
@@ -198,9 +217,12 @@ impl TuiState {
             return;
         };
 
-        let total = self.current_messages().len();
+        let total = self.messages.get(&room).map_or(0, Vec::len);
+        let visible = usize::from(self.messages_view_height);
+        let max_scroll = total.saturating_sub(visible);
+
         let offset = self.scroll.entry(room).or_insert(0);
-        *offset = offset.saturating_add(1).min(total);
+        *offset = offset.saturating_add(1).min(max_scroll);
     }
 
     /**

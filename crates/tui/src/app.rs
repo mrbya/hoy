@@ -127,6 +127,10 @@ async fn run_loop(
     client.list_rooms().await?;
 
     loop {
+        if let Ok(size) = terminal.size() {
+            state.update_message_view_height(size.height);
+        }
+
         terminal.draw(|f| ui::draw(f, &state))?;
 
         tokio::select! {

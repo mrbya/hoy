@@ -198,10 +198,6 @@ fn draw_messages(frame: &mut Frame<'_>, state: &TuiState, area: Rect) {
     let visible_height = usize::from(inner.height);
     let scroll = state.current_scroll();
 
-    // Cap scroll so no empty window is shown above the first message.
-    let max_scroll = total.saturating_sub(visible_height);
-    let scroll = scroll.min(max_scroll);
-
     let end = total.saturating_sub(scroll);
     let start = end.saturating_sub(visible_height);
 
