@@ -280,7 +280,7 @@ async fn dispatch_input(
     state: &mut TuiState,
     client: &ClientHandle,
 ) -> Result<(), TuiError> {
-    if let Some(room) = input.strip_prefix("/room ") {
+    if let Some(room) = input.strip_prefix("/room") {
         let room = room.trim();
         if room.is_empty() || RoomName::new(room).is_err() {
             state.notification = Some(String::from(
@@ -384,5 +384,150 @@ fn history_message(record: MessageRecord) -> ChatMessage {
     ChatMessage::User {
         from: record.from,
         text: record.text,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use hoy_net::client::core::spawn_client;
+    use hoy_net::client::event::ClientEvent;
+    use hoy_test::async_ok;
+
+    use crate::app::{dispatch_input, handle_app_event, handle_client_event};
+    use crate::event::AppEvent;
+    use crate::state::TuiState;
+
+    #[test]
+    fn client_event_room_joined_sets_current_room() {
+        let mut state = TuiState::default();
+        handle_client_event(
+            ClientEvent::RoomJoined {
+                room: "general".into(),
+                messages: vec![],
+            },
+            &mut state,
+        );
+        assert_eq!(state.current_room.as_deref(), Some("general"));
+        assert!(state.notification.is_none());
+    }
+
+    #[test]
+    fn client_event_error_sets_notification() {
+        let mut state = TuiState::default();
+        handle_client_event(
+            ClientEvent::Error {
+                message: "something broke".into(),
+            },
+            &mut state,
+        );
+        assert_eq!(state.notification.as_deref(), Some("something broke"));
+    }
+
+    #[test]
+    fn client_event_message_appended_to_correct_room() {
+        let mut state = TuiState::default();
+        handle_client_event(
+            ClientEvent::RoomJoined {
+                room: "general".into(),
+                messages: vec![],
+            },
+            &mut state,
+        );
+        handle_client_event(
+            ClientEvent::MessageReceived {
+                from: "alice".into(),
+                room: "general".into(),
+                text: "hello".into(),
+            },
+            &mut state,
+        );
+        assert_eq!(state.current_messages().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn insert_char_updates_input_and_cursor() {
+        let (client, _events) = spawn_client();
+        let mut state = TuiState::default();
+
+        handle_app_event(AppEvent::InsertChar('h'), &mut state, &client)
+            .await
+            .expect("Event handling failed unexpectedly");
+        handle_app_event(AppEvent::InsertChar('i'), &mut state, &client)
+            .await
+            .expect("Event handling failed unexpectedly");
+
+        assert_eq!(state.input, "hi");
+        assert_eq!(state.cursor_pos, 2);
+
+        client
+            .shutdown()
+            .await
+            .expect("Client shutdown failed unexpectedly");
+    }
+
+    #[tokio::test]
+    async fn submit_clears_input() {
+        let (client, _events) = spawn_client();
+
+        let mut state = TuiState {
+            input: "hello".into(),
+            cursor_pos: 5,
+            ..Default::default()
+        };
+
+        handle_app_event(AppEvent::Submit, &mut state, &client)
+            .await
+            .expect("Event handling failed unexpectedly");
+
+        assert!(state.input.is_empty());
+        assert_eq!(state.cursor_pos, 0);
+
+        client
+            .shutdown()
+            .await
+            .expect("Client shutdown failed unexpectedly");
+    }
+
+    #[tokio::test]
+    async fn dispatch_input_slash_list_sends_list_rooms() {
+        let (client, mut events) = spawn_client();
+        let mut state = TuiState::default();
+
+        dispatch_input("/list", &mut state, &client)
+            .await
+            .expect("Input dispatch failed");
+
+        // Client is not connected, so core emits an error — confirms
+        // ListRooms was sent (not a message or some other command).
+        let event = async_ok!(200, events.recv()).expect("Failed to receive event");
+        assert!(matches!(event, ClientEvent::Error { .. }));
+
+        client
+            .shutdown()
+            .await
+            .expect("Client shutdown failed unexpectedly");
+    }
+
+    #[tokio::test]
+    async fn dispatch_input_unknown_command_sets_notification() {
+        let (client, _events) = spawn_client();
+        let mut state = TuiState::default();
+
+        dispatch_input("/nonsense", &mut state, &client)
+            .await
+            .expect("Input dispatch failed");
+
+        assert!(
+            state
+                .notification
+                .as_deref()
+                .expect("Notification should be populated")
+                .contains("Unknown command")
+        );
+
+        client
+            .shutdown()
+            .await
+            .expect("Client shutdown failed unexpectedly");
     }
 }

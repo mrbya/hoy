@@ -214,3 +214,115 @@ impl TuiState {
         *offset = offset.saturating_sub(1);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+    use crate::state::{ChatMessage, ConnectionStatus, TuiState};
+
+    #[test]
+    fn state_overrides() {
+        let mut state = TuiState::default();
+        assert_ne!(state.status, ConnectionStatus::Connected);
+        assert!(state.server_addr.is_none());
+        assert!(state.username.is_none());
+        assert!(state.current_room.is_none());
+        assert!(state.notification.is_none());
+
+        state
+            .status(ConnectionStatus::Connected)
+            .server_addr(Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 1234)))
+            .username(Some("bob".into()))
+            .current_room(Some("general".into()))
+            .notification(Some("warning".into()));
+
+        assert_eq!(state.status, ConnectionStatus::Connected);
+        assert!(state.server_addr.is_some());
+        assert!(state.username.is_some());
+        assert!(state.current_room.is_some());
+        assert!(state.notification.is_some());
+    }
+
+    #[test]
+    fn state_join_room() {
+        let mut state = TuiState::default();
+        assert!(state.current_room.is_none());
+
+        state.join_room(
+            "general".into(),
+            vec![
+                ChatMessage::User {
+                    from: "bob".into(),
+                    text: "msg 1".into(),
+                },
+                ChatMessage::User {
+                    from: "bob".into(),
+                    text: "msg 2".into(),
+                },
+            ],
+        );
+
+        assert!(state.current_room.is_some());
+        assert_eq!(state.current_room, Some("general".into()));
+        assert_eq!(state.current_messages().len(), 2);
+    }
+
+    #[test]
+    fn state_push_message() {
+        let mut state = TuiState::default();
+        assert_eq!(state.current_messages().len(), 0);
+        state.push_message(
+            "general",
+            ChatMessage::User {
+                from: "bob".into(),
+                text: "hello".into(),
+            },
+        );
+        assert_eq!(state.current_messages().len(), 0);
+
+        state.join_room("general".into(), vec![]);
+        assert_eq!(state.current_messages().len(), 0);
+        state.push_message(
+            "general",
+            ChatMessage::User {
+                from: "bob".into(),
+                text: "hello".into(),
+            },
+        );
+        assert_eq!(state.current_messages().len(), 1);
+    }
+
+    #[test]
+    fn state_scroll() {
+        let mut state = TuiState::default();
+        state.scroll_up();
+        assert_eq!(state.current_scroll(), 0);
+
+        state.join_room("general".into(), vec![]);
+        state.scroll_up();
+        state.scroll_up();
+        assert_eq!(state.current_scroll(), 2);
+        state.scroll_down();
+        assert_eq!(state.current_scroll(), 1);
+
+        state.join_room("new".into(), vec![]);
+        assert_eq!(state.current_scroll(), 0);
+    }
+
+    #[test]
+    fn state_input() {
+        let mut state = TuiState::default();
+        assert_eq!(state.cursor_pos, 0);
+        assert_eq!(state.input, "");
+
+        let chars = ['h', 'e', 'l', 'l', 'o'];
+
+        for c in chars {
+            state.append_char(c);
+        }
+
+        assert_eq!(state.cursor_pos, chars.len());
+        assert_eq!(state.input, "hello");
+    }
+}

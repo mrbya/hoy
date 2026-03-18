@@ -63,3 +63,28 @@ pub const fn map_key_event(key: KeyEvent) -> Option<AppEvent> {
         _ => None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    use crate::event::{AppEvent, map_key_event};
+
+    #[test]
+    fn ctrl_c_maps_to_quit() {
+        let key = KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL);
+        assert_eq!(map_key_event(key), Some(AppEvent::Quit));
+    }
+
+    #[test]
+    fn printable_char_maps_to_insert() {
+        let key = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
+        assert_eq!(map_key_event(key), Some(AppEvent::InsertChar('a')));
+    }
+
+    #[test]
+    fn unrecognised_key_maps_to_none() {
+        let key = KeyEvent::new(KeyCode::F(5), KeyModifiers::NONE);
+        assert_eq!(map_key_event(key), None);
+    }
+}

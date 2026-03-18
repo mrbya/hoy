@@ -273,3 +273,74 @@ fn draw_input(frame: &mut Frame<'_>, state: &TuiState, area: Rect) {
         frame.set_cursor_position((cursor_x, cursor_y));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    use crate::state::{ChatMessage, ConnectionStatus, TuiState};
+
+    fn render(state: &TuiState, width: u16, height: u16) -> ratatui::buffer::Buffer {
+        let backend = TestBackend::new(width, height);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| crate::ui::draw(f, state)).unwrap();
+        terminal.backend().buffer().clone()
+    }
+
+    #[test]
+    fn status_bar_shows_username_and_room() {
+        let state = TuiState {
+            username: Some("bob".into()),
+            current_room: Some("general".into()),
+            status: ConnectionStatus::Connected,
+            ..Default::default()
+        };
+
+        let buffer = render(&state, 80, 24);
+
+        // Row 0 is the status bar
+        let row: String = (0..80)
+            .map(|x| {
+                buffer
+                    .cell((x, 0))
+                    .expect("Failed to retrieve buffer cell")
+                    .symbol()
+                    .to_owned()
+            })
+            .collect();
+
+        assert!(row.contains("bob @ #general"));
+        assert!(row.contains("connected"));
+    }
+
+    #[test]
+    fn draw_does_not_panic_on_minimal_terminal() {
+        // Smoke test: just verify nothing panics on a very small terminal
+        let state = TuiState::default();
+        render(&state, 20, 6);
+    }
+
+    #[test]
+    fn message_history_appears_in_message_panel() {
+        let mut state = TuiState::default();
+        state.join_room(
+            "general".into(),
+            vec![ChatMessage::User {
+                from: "alice".into(),
+                text: "hello world".into(),
+            }],
+        );
+
+        let buffer = render(&state, 80, 24);
+
+        let content: String = buffer
+            .content()
+            .iter()
+            .map(|c| c.symbol().to_owned())
+            .collect();
+
+        assert!(content.contains("alice"));
+        assert!(content.contains("hello world"));
+    }
+}
