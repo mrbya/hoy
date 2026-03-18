@@ -198,8 +198,9 @@ impl TuiState {
             return;
         };
 
+        let total = self.current_messages().len();
         let offset = self.scroll.entry(room).or_insert(0);
-        *offset = offset.saturating_add(1);
+        *offset = offset.saturating_add(1).min(total);
     }
 
     /**
@@ -300,6 +301,20 @@ mod tests {
         assert_eq!(state.current_scroll(), 0);
 
         state.join_room("general".into(), vec![]);
+        state.push_message(
+            "general",
+            ChatMessage::User {
+                from: "bob".into(),
+                text: "hello".into(),
+            },
+        );
+        state.push_message(
+            "general",
+            ChatMessage::User {
+                from: "bob".into(),
+                text: "hello".into(),
+            },
+        );
         state.scroll_up();
         state.scroll_up();
         assert_eq!(state.current_scroll(), 2);

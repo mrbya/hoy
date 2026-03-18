@@ -4,11 +4,11 @@
 //! function: given a [`Frame`](ratatui::Frame) and the current [`TuiState`](crate::state::TuiState) it produces
 //! output and nothing else.
 
-use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
+use ratatui::Frame;
 
 use crate::state::{ChatMessage, ConnectionStatus, TuiState};
 
@@ -199,7 +199,7 @@ fn draw_messages(frame: &mut Frame<'_>, state: &TuiState, area: Rect) {
     let scroll = state.current_scroll();
 
     // Cap scroll so no empty window is shown above the first message.
-    let max_scroll = total.saturating_add(scroll);
+    let max_scroll = total.saturating_sub(visible_height);
     let scroll = scroll.min(max_scroll);
 
     let end = total.saturating_sub(scroll);
@@ -276,8 +276,8 @@ fn draw_input(frame: &mut Frame<'_>, state: &TuiState, area: Rect) {
 
 #[cfg(test)]
 mod tests {
-    use ratatui::Terminal;
     use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
 
     use crate::state::{ChatMessage, ConnectionStatus, TuiState};
 

@@ -288,6 +288,7 @@ async fn dispatch_input(
             ));
         } else {
             client.join_room(room.to_owned()).await?;
+            client.list_rooms().await?;
         }
     } else if input == "/list" {
         client.list_rooms().await?;
