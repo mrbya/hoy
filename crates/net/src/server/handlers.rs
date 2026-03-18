@@ -16,7 +16,7 @@ use crate::server::client_id::ClientId;
 use crate::server::state::ServerState;
 
 /// Maximum number of messages to load from storage on sync.
-const MESSAGE_HISTORY_LIMIT: usize = 50;
+const MESSAGE_HISTORY_LIMIT: usize = 500;
 
 /// Clients that have connected but have not yet completed the `Hello` handshake.
 ///

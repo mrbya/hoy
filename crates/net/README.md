@@ -85,7 +85,7 @@ Disconnected ──Connect──▶ AwaitingWelcome ──Welcome──▶ Conne
 | `Disconnected` | Session ends or error occurs |
 | `MessageReceived { from, room, text }` | `ChatMessage` received |
 | `SystemMessage { text }` | `SystemMessage` received |
-| `RoomJoined { room, messages }` | `RoomJoined` received; `messages` is a `Vec<MessageRecord>` with up to 50 recent messages |
+| `RoomJoined { room, messages }` | `RoomJoined` received; `messages` is a `Vec<MessageRecord>` with up to 500 recent messages |
 | `RoomList { rooms }` | `RoomList` received |
 | `Pong` | `Pong` received |
 | `Error { message }` | `Error` packet or local failure |

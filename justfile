@@ -23,11 +23,7 @@ test *FLAGS:
 
 # Build and run.
 run *FLAGS:
-    cargo run --bin hoy {{FLAGS}}
-
-# Build and run hoy-incognito bin.
-run-i *FLAGS:
-    cargo run --bin hoy-incognito {{FLAGS}}
+    cargo run {{FLAGS}}
 
 # Build release
 build *FLAGS:
@@ -91,6 +87,7 @@ index:
     markdown-toc -i ./crates/core/README.md
     markdown-toc -i ./crates/net/README.md
     markdown-toc -i ./crates/protocol/README.md
+    markdown-toc -i ./crates/tui/README.md
 
 # Runs all checks necessary before commit.
 # Checks formating, code quality, tests, documentation, spellcheck and more.

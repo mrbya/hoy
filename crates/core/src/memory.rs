@@ -78,7 +78,7 @@ impl ServerStore for InMemoryStore {
     }
 
     fn storage_slug(&self) -> String {
-        String::from("In memory storage. No data persistence.")
+        String::from("In-memory storage. No data persistence.")
     }
 }
 

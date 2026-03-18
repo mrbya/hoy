@@ -1,6 +1,6 @@
 [package]
 name = "hoy-tui"
-version = "0.0.1-pre1"
+version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,10 +13,19 @@ categories.workspace = true
 description = "Hoy real-time chat tui crate"
 
 [dependencies]
+hoy-net.workspace = true
+hoy-protocol.workspace = true
+hoy-core.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+ratatui = { version = "0.30.0", features = ["crossterm"] }
+crossterm = { version = "0.29.0", features = ["event-stream"] }
+futures = "0.3.32"
 
 [dev-dependencies]
 criterion = "0.8"
 pretty_assertions = "1"
+hoy-test.workspace = true
 
 [package.metadata.cargo-udeps.ignore]
 development = ["criterion", "pretty_assertions"]

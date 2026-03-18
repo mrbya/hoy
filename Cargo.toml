@@ -8,10 +8,10 @@ members = [
 ]
 
 [workspace.dependencies]
-hoy-core = { version = "0.2.0", path = "crates/core" }
+hoy-core = { version = "0.2.1", path = "crates/core" }
 hoy-net = { version = "0.2.1", path = "crates/net"}
 hoy-protocol = { version = "0.2.0", path = "crates/protocol"}
-hoy-tui = { version = "0.0.1-pre1", path = "crates/tui" }
+hoy-tui = { version = "0.1.0", path = "crates/tui" }
 hoy-test = { version = "0.1.1", path = "crates/test" }
 thiserror = "2.0.18"
 serde = { version = "1", features = ["derive"] }
@@ -35,7 +35,7 @@ categories = ["command-line-utilities"]
 
 [package]
 name = "hoy"
-version = "0.2.0"
+version = "0.3.0"
 authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -52,10 +52,6 @@ publish = true
 [[bin]]
 name = "hoy"
 path = "src/main.rs"
-
-[[bin]]
-name = "hoy-incognito"
-path = "src/incognito.rs"
 
 [features]
 full = []

@@ -2,6 +2,73 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-03-18
+
+### Added
+
+#### `hoy-tui` — Terminal UI
+
+- `run_tui(server_addr, username)` — async entry point in `app.rs`: spawns the client core, connects to the server, enters raw mode, runs the interactive loop, and restores the terminal before returning (even on error).
+- `setup_terminal()` / `restore_terminal()` — raw mode and alternate-screen lifecycle; cleanup errors are logged but never suppress the original result.
+- `run_loop()` — `tokio::select!`-based loop that drives both crossterm terminal events and `ClientEvent`s every frame.
+- `dispatch_input(input, state, client)` — interprets submitted text as a slash command or chat message:
+  - `/room <name>` — join or create a room via `ClientHandle::join_room`.
+  - `/list` — request the room list via `ClientHandle::list_rooms`.
+  - `/ping` — send a keepalive ping via `ClientHandle::ping`.
+  - Anything else — sent as a chat message via `ClientHandle::send_message`.
+  - Invalid room names produce a local notification without sending a packet.
+- `AppEvent` enum (`event.rs`) — high-level event type abstracting over raw crossterm key codes: `Quit`, `Submit`, `InsertChar`, `DeleteCharBack`, `DeleteCharForward`, `MoveCursorLeft/Right/Start/End`, `ScrollUp`, `ScrollDown`, `Resize`.
+- `map_key_event(key) -> Option<AppEvent>` — pure key-to-event mapping; Ctrl+C → Quit, Ctrl+A/Home → `MoveCursorStart`, Ctrl+E/End → `MoveCursorEnd`.
+- `TuiState` (`state.rs`) — single source of truth for the renderer: connection status, server address, username, current room, room list, per-room message history, input buffer, byte-level cursor position, per-room scroll offset, viewport height, and a one-shot notification string.
+- `ChatMessage` enum — `User { from, text }` and `System { text }` variants.
+- `ConnectionStatus` enum — `Disconnected` (default), `Connecting`, `Connected`.
+- `TuiState` helper methods: `current_messages()`, `push_message()`, `join_room()` (resets scroll on entry), `append_char()`, `scroll_up()`, `scroll_down()`, `current_scroll()`, `update_message_view_height(rows)`.
+- `TuiError` (`error.rs`) — error type for TUI I/O and network failures.
+- `draw(frame, state)` (`ui.rs`) — pure frame renderer with a three-zone layout:
+  1. **Status bar** (1 row): `hoy  │  <username> @ #<room>  │  <status>  [notification]` with colour-coded connection status.
+  2. **Main area**: room-list panel (22-char wide) on the left, scrollable message view on the right; user messages in cyan, system messages in dark-grey italics.
+  3. **Input bar** (3 rows): bordered input widget with a visible block cursor.
+
+#### `hoy-core` — CLI
+
+- `-i / --incognito` flag — runs the server with an `InMemoryStore` instead of the SQLite database; replaces the separate `hoy-incognito` binary.
+- `-n / --no-tui` flag — runs the client in stdout mode (test client) instead of the TUI.
+- `Hoy::new() -> Result<Self, HoyError>` — parses and validates args in one call; replaces the previous `Hoy::default()` entry point.
+- `Hoy::validate_args()` — checks for logically incompatible flag combinations and prints warnings for ignored flags (e.g. `--username` when running as a server).
+- `Hoy::run_incognito() -> bool` / `Hoy::run_tui() -> bool` — new accessors for the two new flags.
+
+#### Testing
+
+- `hoy-tui` unit tests across all four modules:
+  - `app.rs`: `handle_app_event` tests for input editing, cursor movement, command dispatch, and quit.
+  - `event.rs`: `map_key_event` roundtrip tests for all mapped keys.
+  - `state.rs`: `push_message`, `join_room` scroll-reset, `current_messages` empty-room guard, `append_char` cursor tracking, `scroll_up`/`scroll_down` basic behaviour.
+  - `ui.rs`: smoke tests rendering each panel against a `TestBackend` at a fixed terminal size.
+- `cli.rs`: `hoy_validate_args` — asserts `Ok(())` for a fully-populated arg set and `Err(HoyError::NoUsername)` for the default.
+
+### Changed
+
+#### Binary (`hoy`)
+
+- `src/main.rs`: unified `run_hoy(hoy: Hoy)` now selects all four runtime modes — server with db store, server incognito, TUI client, stdout client — from a single function; `Hoy::new()` replaces `Hoy::default()` so arg validation runs before any I/O.
+- `src/lib.rs`: `run_hoy(hoy: Hoy, store: impl ServerStore)` removed; store construction is now internal to `run_hoy`.
+- `src/incognito.rs` and the `hoy-incognito` binary removed; incognito mode is now available via `hoy -s -i`.
+
+#### Docs
+
+- `crates/tui/README.md` — new comprehensive reference: public API, layout diagram, key bindings, slash commands, `TuiState` field table.
+- `crates/core/README.md` — updated to document the new CLI flags and `Hoy::new()`.
+- `README.md` — updated to reflect the TUI default and the `-n/--no-tui` fallback.
+
+### Fixed
+
+#### `hoy-tui` — Scrolling
+
+- `scroll_up()` now caps at `total_messages − viewport_height` instead of `total_messages`, preventing scrolling into empty space above the first message.
+- `update_message_view_height(rows)` introduced so the scroll cap reflects the actual viewport on every frame (recalculated as `rows − 6` accounting for status bar, input bar, and message-view borders).
+- `draw_messages()`: corrected `max_scroll` from `total + scroll` to `total − visible_height`; the rendered slice no longer shifts incorrectly when the scroll offset exceeds the message count.
+- `scroll_up()` no longer enters a dead zone that requires extra `scroll_down` presses to resume downward scrolling.
+
 ## [0.2.0] - 2026-03-16
 
 ### Added
