@@ -198,14 +198,14 @@ impl TuiState {
      * Must be called once per frame before drawing so that scroll capping
      * reflects the actual viewport. The layout is:
      * - 1 row  — status bar
-     * - N rows — main area (terminal_rows - 4)
+     * - N rows — main area (`rows` - 4)
      * - 3 rows — input bar (including border)
      * - 2 rows — message view borders
      *
      * # Arguments
      * - `terminal_rows`: current terminal height in rows.
      */
-    pub fn update_message_view_height(&mut self, rows: u16) {
+    pub const fn update_message_view_height(&mut self, rows: u16) {
         self.messages_view_height = rows.saturating_sub(6);
     }
 
@@ -314,6 +314,49 @@ mod tests {
             },
         );
         assert_eq!(state.current_messages().len(), 1);
+    }
+
+    #[test]
+    fn scroll_up_is_bounded_by_viewport() {
+        let mut state = TuiState::default();
+        state.update_message_view_height(20); // message_view_height = 14
+
+        state.join_room(
+            "general".into(),
+            (1..=16)
+                .map(|i| ChatMessage::System {
+                    text: format!("msg {i}"),
+                })
+                .collect(),
+        );
+
+        // max_scroll = 16 - 14 = 2
+        for _ in 0..20 {
+            state.scroll_up();
+        }
+
+        assert_eq!(state.current_scroll(), 2);
+
+        // scroll_down should work immediately — no dead zone
+        state.scroll_down();
+        assert_eq!(state.current_scroll(), 1);
+    }
+
+    #[test]
+    fn scroll_up_is_no_op_when_all_messages_fit() {
+        let mut state = TuiState::default();
+        state.update_message_view_height(20); // message_view_height = 14
+
+        state.join_room(
+            "general".into(),
+            vec![ChatMessage::System {
+                text: "only one".into(),
+            }],
+        );
+
+        // 1 message fits in 14 rows, max_scroll = 0
+        state.scroll_up();
+        assert_eq!(state.current_scroll(), 0);
     }
 
     #[test]

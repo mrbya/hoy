@@ -4,11 +4,11 @@
 //! function: given a [`Frame`](ratatui::Frame) and the current [`TuiState`](crate::state::TuiState) it produces
 //! output and nothing else.
 
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
-use ratatui::Frame;
 
 use crate::state::{ChatMessage, ConnectionStatus, TuiState};
 
@@ -272,8 +272,8 @@ fn draw_input(frame: &mut Frame<'_>, state: &TuiState, area: Rect) {
 
 #[cfg(test)]
 mod tests {
-    use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
 
     use crate::state::{ChatMessage, ConnectionStatus, TuiState};
 
